@@ -1542,37 +1542,6 @@ png(paste0(Fig_dir,"Bldg_Area_Cat.png"),width=16,height=4,res=1200,units='in')
 Bldg_Area_Cat
 dev.off()
 
-# B.s<-p3%>%group_by(StructureDensity,cat,State)%>%summarise(Area_thousand=sum(Area_thousand))
-# 
-# 
-# Bldg_Area_Cat_State<-ggplot() + 
-#   geom_bar(aes(y = Area_thousand, x = cat, fill = StructureDensity), data = B.s, stat="identity") + coord_flip()  +
-#   facet_grid(rows=vars(State),switch="y") +
-#   theme_bw(base_size=20) + 
-#   scale_fill_brewer(palette="Greys") +
-#   ggtitle("Area of Parcels by CoBRA Category and Structure Density, by State")+
-#   xlab("CoBRA Category") + ylab("Area (1000s Acres)") +
-#   theme(legend.position="bottom")
-# 
-# 
-# png(paste0(Fig_dir,"Bldg_Area_Cat_State.png"),width=16,height=9,res=1200,units='in')
-# Bldg_Area_Cat_State
-# dev.off()
-# 
-# Bldg_Area_Cat_State_percent<-ggplot() + 
-#   geom_bar(aes(y = Area_thousand, x = cat, fill = StructureDensity), data = B.s, stat="identity", position="fill") + coord_flip()  +
-#   theme_bw(base_size = 20) + 
-#   facet_grid(rows=vars(State), switch="y") +
-#   scale_fill_brewer(palette="Greys") +
-#   ggtitle("Area (%) of Parcels by CoBRA Category and Structure Density, by State") +
-#   xlab("CoBRA Category") + ylab("Area (%)") +
-#   theme(legend.position="bottom") 
-
-
-# png(paste0(Fig_dir,"Bldg_Area_Cat_State_percent.png"),width=16,height=9,res=1200,units='in')
-# Bldg_Area_Cat_State_percent
-# dev.off()
-
 
 ##Land use within categories
 p3$LU<-as.character(p3$LU_SubClass)
@@ -1701,145 +1670,6 @@ LU.st<-merge(LU.st,areas,by=c("cat","State"))
 LU.st$perc<-100*LU.st$LUArea/LU.st$Area.x
 
 
-Bldg_Area_Cat_LU_state<-ggplot(LU.st,aes(y=perc, x=LU, fill=LU)) + 
-  geom_bar(stat="identity",position="dodge") + 
-  coord_flip()  + 
-  ggtitle("Area of Parcels by CoBRA Category and Structure Density") +
-  theme_bw(base_size = 20) + 
-  scale_fill_viridis_d() +
-  ggtitle("(%) Area Land Use Categories (Zillow) by CoBRA Category  and State")+
-  xlab("CoBRA Category") + ylab("(%) Area") +
-  theme(legend.position="bottom") +
-  facet_grid(rows=vars(State),cols=vars(cat),labeller = labeller(cat = label_wrap_gen(16)),switch="y")
-
-png(paste0(Fig_dir,"Land_Use_Percent_State.png"),width=9,height=16,res=1200,units='in')
-Bldg_Area_Cat_LU_state
-dev.off()
-
-
-
-# 
-# 
-# Overall<-ggplot() + geom_bar(aes(y = Area, x=State,fill=cat), data = p3,
-#                            stat="identity") + scale_fill_brewer(palette="RdYlBu") + coord_flip() +
-# theme_classic(base_size = 20) 
-# 
-# png(paste0(Fig_dir,"Overallclss.png"),width=16,height=9,res=1200,units='in')
-# Overall
-# dev.off()
-# 
-# Overall_percent<-ggplot() + geom_bar(aes(y = Area, x=State,fill=cat), data = p3, position="fill",
-#                            stat="identity") + scale_fill_brewer(palette="RdYlBu") + coord_flip() + scale_y_continuous(labels = scales::percent)  +
-# theme_classic(base_size = 20) 
-# 
-# png(paste0(Fig_dir,"Overallclss_percent.png"),width=16,height=9,res=1200,units='in')
-# Overall_percent
-# dev.off()
-# 
-# 
-# 
-# LU_all_percent<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_Class), data = p3, position="fill",
-#                            stat="identity") + coord_flip()  +
-# theme_classic(base_size = 20) 
-# 
-# png(paste0(Fig_dir,"LU_percent.png"),width=16,height=9,res=1200,units='in')
-# LU_all_percent
-# dev.off()
-# 
-# LU_all_percent_state<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_Class), data = p3, position="fill",
-#                            stat="identity") + coord_flip()  +
-# theme_classic(base_size = 20) + facet_grid(rows=vars(State))
-# 
-# png(paste0(Fig_dir,"LU_percent_state.png"),width=16,height=9,res=1200,units='in')
-# LU_all_percent_state
-# dev.off()
-# 
-# 
-# LU_all<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_Class), data = p3,
-#                            stat="identity") + coord_flip()  +
-# theme_classic(base_size = 20) 
-# 
-# png(paste0(Fig_dir,"LU_all.png"),width=16,height=9,res=1200,units='in')
-# LU_all
-# dev.off()
-# 
-# #Undeveloped SubTable
-# p3$X[which(p3$LU_Class=="No Data")]<-"No Data"
-# p3$LU_Class[which(is.na(p3$LU_Class))]<-"No Data"
-# p3$LU_Class[which(p3$LU_Class=="No Data")]<-"Unknown"
-# p.NB<-p3[which(p3$StructureDensity!="Greater than 0.2 Structures/Acre"),]
-# LU_NB<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_Class), data = p.NB,
-#                            stat="identity", position="dodge") + coord_flip()  +
-# theme_classic(base_size = 20) + scale_fill_brewer(palette="Dark2")
-# 
-# png(paste0(Fig_dir,"LU_NB.png"),width=16,height=9,res=1200,units='in')
-# LU_all
-# dev.off()
-# 
-# 
-# 
-# 
-# 
-# #Residential SubTable
-# p.res<-p3[which(p3$LU_Class=="Residential"),]
-# 
-# Res_Type<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_SubClass), data = p.res, position="fill",
-#                            stat="identity") + coord_flip()  +
-# theme_classic(base_size = 20) 
-# 
-# png(paste0(Fig_dir,"Res_Type.png"),width=16,height=9,res=1200,units='in')
-# Res_Type
-# dev.off()
-# 
-# Res_Type_sum<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_SubClass), data = p.res,
-#                            stat="identity") + coord_flip()  +
-# theme_classic(base_size = 20) 
-# 
-# png(paste0(Fig_dir,"Res_Type_sum.png"),width=16,height=9,res=1200,units='in')
-# Res_Type_sum
-# dev.off()
-# 
-# Res_Type_state<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_SubClass), data = p.res, position="fill",
-#                            stat="identity") + coord_flip()  +
-# theme_classic(base_size = 20) + facet_grid(rows=vars(State))
-# 
-# png(paste0(Fig_dir,"Res_Type_state.png"),width=16,height=9,res=1200,units='in')
-# Res_Type_state
-# dev.off()
-# 
-# 
-# Res_Type_state_sum<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_SubClass), data = p.res,
-#                            stat="identity") + coord_flip()  +
-# theme_classic(base_size = 20) + facet_grid(rows=vars(State))
-# 
-# png(paste0(Fig_dir,"Res_Type_state_sum.png"),width=16,height=9,res=1200,units='in')
-# Res_Type_state_sum
-# dev.off()
-# 
-# 
-# #Undeveloped SubTable
-# 
-# p.und<-p3[which(p3$LU_Class=="Undeveloped"),]
-# 
-# Und_Type<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_SubClass), data = p.und, position="fill",
-#                            stat="identity") + coord_flip()  +
-# theme_classic(base_size = 20)
-# 
-# png(paste0(Fig_dir,"Und_Type.png"),width=16,height=9,res=1200,units='in')
-# Und_Type
-# dev.off()
-# 
-# Und_Type_state<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_SubClass), data = p.und, position="fill",
-#                            stat="identity") + coord_flip()  +
-# theme_classic(base_size = 20) + facet_grid(rows=vars(State))
-# 
-# png(paste0(Fig_dir,"Und_Type_state.png"),width=16,height=9,res=1200,units='in')
-# Und_Type_state
-# dev.off()
-
-
-
-
 
 ```
 
@@ -1939,10 +1769,6 @@ b$count=1
 b$Area.bldg[is.na(b$Area.bldg)]<-0
 b$PercentParcelBldg<-100*b$Area.bldg/b$Area_Parcel
 
-m1<-tidy(lm(PercentParcelBldg~cat,data=b))
-m1.f<-tidy(lm(PercentParcelBldg~cat+factor(FIPS),data=b))
-m2<-tidy(lm(PercentParcelBldg~cat,data=b[b$Area.bldg>0,]))
-m2.f<-tidy(lm(PercentParcelBldg~cat+factor(FIPS),data=b[b$Area.bldg>0,]))
 
 b$NO_NFIP<-0
 b$NO_NFIP[b$CoBRA_Status %in% c("System Unit","OPA")]<-1
@@ -1966,86 +1792,14 @@ r$FPR[which(r$FPR==0)]<-100*r$sqfeet[which(r$FPR==0)]/(43560*r$Area_Parcel[which
 #r$FPR[which(r$FPR>100)]<-100
 r$sqm<-r$sqfeet*0.092903
 
-m3<-tidy(lm(log(sqm)~cat,data=r))
-m3.f<-tidy(lm(log(sqm)~cat+factor(FIPS),data=r))
-
-m4<-tidy(lm(FPR~cat,data=r))
-m4.f<-tidy(lm(FPR~cat+factor(FIPS),data=r))
-
 #YearBuilt, res
 
 r$YearBuiltCensored<-r$YearBuilt
 r$YearBuiltCensored[which(r$YearBuilt<1950)]<-1950
 
-# p6<-ggplot(data=s)+
-#   geom_density(data=subset(s,Protection == "Unprotected"), aes(x=YearBuilt,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
-#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
-#   geom_density(data=subset(s,Protection == "Protected"), aes(x=YearBuilt,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
-#   coord_flip() + 
-#   xlab("Residence Age (Years, censored at 100)") + 
-#   ylab("Smoothed, Scaled Density") + 
-#   facet_grid(~CoBRA_Status) + 
-#  # xlim(0,2000000) + 
-#   scale_fill_brewer(palette="Greys") + 
-#   theme_bw(base_size=20) + 
-#   theme(legend.position="top") + 
-#   scale_color_brewer("") + 
-#   ggtitle("Distribution of Residential Building Age")
-# 
-# png(paste0(Fig_dir,"Resi_Age.png"),width=16,height=9,res=1200,units='in')
-# par(mar=c(5,6,4,1)+.1)
-# beanplot(YearBuilt ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Year Built (censored 1950)", cex.main=4,cex.lab=2,cex.axis=1.8,ylim=c(1950,2020))
-# legend("bottomright", fill = c("black", "grey"), cex=1.8,
-# legend = c("Unprotected", "Protected"))
-# abline(h=1982, col="red")
-# text(3.5,1983.5, "1982", pos=2)
-# text(3.5,1991.5, "1990",pos=2)
-# abline(h=1990, col= "red")
-# 
-# dev.off()
-# 
-# t<-pairwise.wilcox.test(r$YearBuilt,r$cat,p.adjust.method="bonferroni")
-# write.csv(t$p.value,paste0(Tab_dir,"wilcox_YearBuilt_res.csv"))
-# 
-# 
-# 
-# png(paste0(Fig_dir,"Resi_Age_State.png"),width=9,height=16,res=1200,units='in')
-# p6 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
-# dev.off()
-
 r$sqft<-r$sqfeet
-#r$sqft[which(r$sqft>10000)]<-10000
 r$sqft[which(r$sqft<500)]<-NA
 #sqfeet
-# p7<-ggplot(data=r)+
-#   geom_density(data=subset(r,Protection == "Unprotected"), aes(x=sqft,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
-#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
-#   geom_density(data=subset(r,Protection == "Protected"), aes(x=sqft,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
-#   coord_flip() + 
-#   xlab("Residence Square Footage (censored at 10,000)") + 
-#   ylab("Smoothed, Scaled Density") + 
-#   facet_grid(~CoBRA_Status) + 
-#  # xlim(0,2000000) + 
-#   scale_fill_brewer(palette="Greys") + 
-#   theme_bw(base_size=20) + 
-#   theme(legend.position="top") + 
-#   scale_color_brewer("") + 
-#   ggtitle("Distribution of Residential Square Footage")
-# 
-# png(paste0(Fig_dir,"Resi_sqft.png"),width=16,height=9,res=1200,units='in')
-# par(mar=c(5,6,4,1)+.1)
-#  beanplot(sqft ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Residence Square Footage (censored at 10,000)", cex.main=4,cex.lab=2,cex.axis=1.8, ylim=c(0,10000), bw="nrd0", log="")
-# legend("topright", fill = c("black", "grey"), cex=1.8,
-# legend = c("Unprotected", "Protected"))
-# dev.off()
-# 
-# t<-pairwise.wilcox.test(r$sqft,r$cat,p.adjust.method="bonferroni")
-# write.csv(t$p.value,paste0(Tab_dir,"wilcox_sqft_res.csv"))
-# 
-# 
-# png(paste0(Fig_dir,"Resi_sqft_State.png"),width=9,height=16,res=1200,units='in')
-# p7 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
-# dev.off()
 
 
 
@@ -2054,139 +1808,21 @@ r$sqft[which(r$sqft<500)]<-NA
 #Bedrooms
 r$bed<-r$TotalBedrooms
 r$bed[which(r$TotalBedrooms==0)]<-NA
-#r$bed[which(r$TotalBedrooms>=10)]<-10
-
-
-# p8<-ggplot(data=r)+
-#   geom_bar(data=subset(r,Protection == "Unprotected"), aes(x=bed,y=..prop..,fill=factor(Protection)),colour="black") +
-#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
-#   geom_bar(data=subset(r,Protection == "Protected"), aes(x=bed,y=-..prop..,fill=factor(Protection)),colour="black") +
-#   coord_flip() + 
-#   xlab("# Bedrooms (censored at 10)") + 
-#   ylab("Smoothed, Scaled Density") + 
-#   facet_grid(~CoBRA_Status) + 
-#    xlim(0,10) + 
-#   scale_fill_brewer(palette="Greys") + 
-#   theme_bw(base_size=20) + 
-#   theme(legend.position="top") + 
-#   ggtitle("Distribution of # Bedrooms") + scale_x_continuous(breaks=seq(1,10,1))
-# 
-# png(paste0(Fig_dir,"bedrooms.png"),width=16,height=9,res=1200,units='in')
-# par(mar=c(5,6,4,1)+.1)
-#  beanplot(bed ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Bedrooms (censored at 10)", cex.main=4,cex.lab=2,cex.axis=1.8, bw="nrd0", log="",ylim=c(0,10))
-# legend("bottomright", fill = c("black", "grey"), cex=1.8,
-# legend = c("Unprotected", "Protected"))
-# dev.off()
-# 
-# t<-pairwise.wilcox.test(r$bed,r$cat,p.adjust.method="bonferroni")
-# write.csv(t$p.value,paste0(Tab_dir,"wilcox_bedrooms_res.csv"))
-# 
-# 
-# png(paste0(Fig_dir,"bedrooms_State.png"),width=9,height=16,res=1200,units='in')
-# p8 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
-# dev.off()
-# 
-# 
-# #bathrooms
-# r$bath<-base::rowSums(cbind(r$FullBath,0.5*r$HalfBath,0.75*r$ThreeQuarterBath,0.25*r$QuarterBath),na.rm=T)
-# r$bath[which(r$bath==0)]<-NA
-# #r$bath[which(r$bath>6)]<-6
-# 
-# 
-# p9<-ggplot(data=r)+
-#   geom_bar(data=subset(r,Protection == "Unprotected"), aes(x=bath,y=..prop..,fill=factor(Protection)),colour="black") +
-#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
-#   geom_bar(data=subset(r,Protection == "Protected"), aes(x=bath,y=-..prop..,fill=factor(Protection)),colour="black") +
-#   coord_flip() + 
-#   xlab("# Bathrooms (censored at 6)") + 
-#   ylab("Smoothed, Scaled Density") + 
-#   facet_grid(~CoBRA_Status) + 
-#    xlim(0,10) + 
-#   scale_fill_brewer(palette="Greys") + 
-#   theme_bw(base_size=20) + 
-#   theme(legend.position="top") + 
-#   ggtitle("Distribution of # Bathrooms") + scale_x_continuous(breaks=seq(0,10,0.5))
-# 
-# png(paste0(Fig_dir,"bathrooms.png"),width=16,height=9,res=1200,units='in')
-# par(mar=c(5,6,4,1)+.1)
-#  beanplot(bath ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Bathrooms (censored at 6)", cex.main=4,cex.lab=2,cex.axis=1.8, bw="nrd0", log="", ylim=c(0,6))
-# legend("bottomright", fill = c("black", "grey"), cex=1.8,
-# legend = c("Unprotected", "Protected"))
-# dev.off()
-# 
-# t<-pairwise.wilcox.test(r$bath,r$cat,p.adjust.method="bonferroni")
-# write.csv(t$p.value,paste0(Tab_dir,"wilcox_bathroom_res.csv"))
-# 
-# 
-# png(paste0(Fig_dir,"bathrooms_State.png"),width=9,height=16,res=1200,units='in')
-# p9 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
-# dev.off()
-
 
 #Improvement Market Value/sqft
 
 r$Val_sqft<-r$TotalMarketValue/r$sqft
-#r$Val_sqm<-r$
+r$Val_sqft[which(r$sqfeet<500)]<-NA
 
-#r$Val_sqft<-
-#r$Val_sqft[which(r$sqfeet<500)]<-NA
-#r$Val_sqft[which(r$Val_sqft>500)]<-500
-
-# p10<-ggplot(data=r)+
-#   geom_density(data=subset(r,Protection == "Unprotected"), aes(x=Val_sqft,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
-#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
-#   geom_density(data=subset(r,Protection == "Protected"), aes(x=Val_sqft,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
-#   coord_flip() + 
-#   xlab("Value (USD/sqft, censored at 500 USD/sqft)") + 
-#   ylab("Smoothed, Scaled Density") + 
-#   facet_grid(~CoBRA_Status) + 
-#  # xlim(0,2000000) + 
-#   scale_fill_brewer(palette="Greys") + 
-#   theme_bw(base_size=20) + 
-#   theme(legend.position="top") + 
-#   scale_color_brewer("") + 
-#   ggtitle("Distribution of Assessed Improvement Market Value (USD/sqft)")
-# 
-# png(paste0(Fig_dir,"Resi_val_sqft2.png"),width=16,height=9,res=1200,units='in')
-# par(mar=c(5,6,4,1)+.1)
-#  beanplot(Val_sqft ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Improvement Market Value/ sqft", cex.main=4,cex.lab=2,cex.axis=1.8,ylim=c(10,1000))
-# legend("bottomright", fill = c("black", "grey"), cex=1.8,
-# legend = c("Unprotected", "Protected"))
-# dev.off()
-# 
-# t<-pairwise.wilcox.test(r$Val_sqft,r$cat,p.adjust.method="bonferroni")
-# write.csv(t$p.value,paste0(Tab_dir,"wilcox_valsqft_res.csv"))
-# 
-# 
-# png(paste0(Fig_dir,"Resi_val_sqft_State.png"),width=9,height=16,res=1200,units='in')
-# p10 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
-# dev.off()
 
 
 
 #Land Market Value/acre
 #Lan
 r$Land_Val_Acre<-r$LandMarketValue/r$Area_Parcel
-png(paste0(Fig_dir,"LandMarket_Acre_res.png"),width=16,height=9,res=1200,units='in')
-par(mar=c(5,6,4,1)+.1)
-beanplot(Land_Val_Acre ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Land Market Value (USD/Acre) - log scale ", cex.main=4,cex.lab=2,cex.axis=1.8)
-legend("bottomright", fill = c("black", "grey"), cex=1.8,
-legend = c("Unprotected", "Protected"))
-dev.off()
-
-t<-pairwise.wilcox.test(r$Land_Val_Acre,r$cat,p.adjust.method="bonferroni")
-write.csv(t$p.value,paste0(Tab_dir,"wilcox_landvalacre_res.csv"))
-
 
 
 ##Sale Price/ sqft
-# 
-# png(paste0(Fig_dir,"SalePrice_res.png"),width=16,height=9,res=1200,units='in')
-# par(mar=c(5,6,4,1)+.1)
-# beanplot(RealSalesPrice2016 ~ Protection*CoBRA_Status, data=s, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Sale Price (2016 USD) - log scale ", cex.main=4,cex.lab=2,cex.axis=1.8,ylim=c(10000,10000000))
-# legend("topright", fill = c("black", "grey"), cex=1.8,
-# legend = c("Unprotected", "Protected"))
-# dev.off()
 
 
 s$Sales_sqft<-s$RealSalesPrice2016/s$sqfeet
@@ -2195,28 +1831,7 @@ s$Sales_sqft[s$RealSalesPrice2016<5000]<-NA
 s$Sale.sqft<-s$SalesPriceAmount/s$sqfeet
 
 
-#s<-s[s$YearSold>=2010,]
-#s$sqm<-s$sqfeet*0.09
-s$Sales_sqm<-s$Sales_sqft/0.092903
-
-m5<-tidy(lm(log(Sales_sqm)~cat,data=s))
-m5.trim<-tidy(lm(log(Sales_sqm)~cat,data=s[(s$SalesPriceAmount>10000 & s$SalesPriceAmount<2800000),]))
-m5.f<-tidy(lm(log(Sales_sqm)~cat+factor(FIPS),data=s))
-m5.f.trim<-tidy(lm(log(Sales_sqm)~cat+factor(FIPS),data=s[(s$SalesPriceAmount>10000 & s$SalesPriceAmount<2800000),]))
-m5.f.y<-tidy(lm(log(Sales_sqm)~cat+factor(FIPS)+YearSold,data=s))
-m5.f.y.trim<-tidy(lm(log(Sales_sqm)~cat+factor(FIPS)+YearSold,data=s[(s$SalesPriceAmount>10000 & s$SalesPriceAmount<2800000),]))
-
-
-png(paste0(Fig_dir,"SalePrice_sqft_res.png"),width=16,height=9,res=1200,units='in')
-par(mar=c(5,6,4,1)+.1)
-beanplot(Sales_sqft ~ Protection*CoBRA_Status, data=s, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Sale Price (2016 USD) - log scale ", cex.main=4,cex.lab=2,cex.axis=1.8,ylim=c(10,10000))
-legend("topright", fill = c("black", "grey"), cex=1.8,
-legend = c("Unprotected", "Protected"))
-dev.off()
-
-t<-pairwise.wilcox.test(s$Sales_sqft,s$cat,p.adjust.method="bonferroni")
-write.csv(t$p.value,paste0(Tab_dir,"wilcox_Sales_sqft_res.csv"))
-
+s$Sales_sqm<-s$Sales_sqft/0.09290
 
 
 ###Vacant values
