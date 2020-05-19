@@ -1951,44 +1951,8 @@ b$Area_truncate[which(b$Area_truncate<0.01)]<-NA
 b$Area_Parcel[which(b$Area_Parcel<0.01)]<-NA
 b$count=1
 
-# 1.	REG with %Parcel area covered by structures (Microsoft buildings)
-# 2.	REG with %Parcel area covered by structures  (subset just parcels with structures) (Microsoft buildings)
-# 3.	Y=0/1 if residential, weighted by area of parcel
-
-
-
 
 #Area
-# p1<-ggplot(data=b)+
-#   geom_density(data=subset(b,Protection == "Unprotected"), aes(x=Area_truncate,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
-#   geom_density(data=subset(b,Protection == "Protected"), aes(x=Area_truncate,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
-#   coord_flip() + 
-#   xlab("Area (acres, censored at 5 ac)") + 
-#   ylab("Smoothed, Scaled Density") + 
-#   facet_grid(~CoBRA_Status) + 
-#   xlim(0,5) + 
-#   scale_fill_brewer(palette="Greys") + 
-#   theme_bw(base_size=20) + 
-#   theme(legend.position="top") + 
-#   scale_color_brewer("") + 
-#   ggtitle("Distribution of Parcel Size by CoBRA and other Protective status") 
-# 
-# 
-# png(paste0(Fig_dir,"Parcel_Size.png"),width=16,height=9,res=1200,units='in')
-# par(mar=c(5,6,4,1)+.1)
-# beanplot(Area_Parcel ~ Protection*CoBRA_Status, data=b, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Parcel Size (Acres)-log scale", cex.main=4,cex.lab=2,cex.axis=1.8)
-# legend("bottomright", fill = c("black", "grey"), cex=1.8,
-# legend = c("Unprotected", "Protected"))
-# dev.off()
-# 
-# t<-pairwise.wilcox.test(b$Area_Parcel,b$cat,p.adjust.method="bonferroni")
-# write.csv(t$p.value,paste0(Tab_dir,"wilcox_parcelSize.csv"))
-# 
-# 
-# png(paste0(Fig_dir,"Parcel_Size_State.png"),width=9,height=16,res=1200,units='in')
-# p1 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
-# dev.off()
-# 
 
 ####Land Value
 # 
@@ -1997,36 +1961,6 @@ b$count=1
 # 
 # #Land Market Value/Acre
 # 
-# 
-# p2<-ggplot(data=b)+
-#   geom_density(data=subset(b,Protection == "Unprotected"), aes(x=LandMarketValue_Acre,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
-#   
-#   geom_density(data=subset(b,Protection == "Protected"), aes(x=LandMarketValue_Acre,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
-#   coord_flip() + 
-#   xlab(" 1,000 USD/Acre), censored at 5,000") + 
-#   ylab("Smoothed, Scaled Density") + 
-#   facet_grid(~CoBRA_Status) + 
-#  # xlim(0,2000000) + 
-#   scale_fill_brewer(palette="Greys") + 
-#   theme_bw(base_size=20) + 
-#   theme(legend.position="top") + 
-#   scale_color_brewer("") + 
-#   ggtitle("Distribution of Market Value/Acre by CoBRA and other Protective status")
-# 
-# png(paste0(Fig_dir,"LandMarket_Acre_all.png"),width=16,height=9,res=1200,units='in')
-# par(mar=c(5,6,4,1)+.1)
-# beanplot(LandMarketValue_Acre ~ Protection*CoBRA_Status, data=b, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Land Market Value (USD/Acre) - log scale ", cex.main=4,cex.lab=2,cex.axis=1.8,log="y")
-# legend("bottomright", fill = c("black", "grey"), cex=1.8,
-# legend = c("Unprotected", "Protected"))
-# dev.off()
-# 
-# t<-pairwise.wilcox.test(b$LandMarketValue_Acre,b$cat,p.adjust.method="bonferroni")
-# write.csv(t$p.value,paste0(Tab_dir,"wilcox_LandMarketValue_Acre_all.csv"))
-# 
-# 
-# png(paste0(Fig_dir,"LandMarket_Acre_all_State.png"),width=9,height=16,res=1200,units='in')
-# p2 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
-# dev.off()
 
 #bldg footprintel
 
@@ -2038,37 +1972,6 @@ m1.f<-tidy(lm(PercentParcelBldg~cat+factor(FIPS),data=b))
 m2<-tidy(lm(PercentParcelBldg~cat,data=b[b$Area.bldg>0,]))
 m2.f<-tidy(lm(PercentParcelBldg~cat+factor(FIPS),data=b[b$Area.bldg>0,]))
 
-# 
-# 
-# p3<-ggplot(data=b)+
-#   geom_density(data=subset(b,Protection == "Unprotected"), aes(x=PercentParcelBldg,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
-#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
-#   geom_density(data=subset(b,Protection == "Protected"), aes(x=PercentParcelBldg,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
-#   coord_flip() + 
-#   xlab("Land Market Value (1,000 USD)/Acre)") + 
-#   ylab("Smoothed, Scaled Density") + 
-#   facet_grid(~CoBRA_Status) + 
-#  # xlim(0,2000000) + 
-#   scale_fill_brewer(palette="Greys") + 
-#   theme_bw(base_size=20) + 
-#   theme(legend.position="top") + 
-#   scale_color_brewer("") + 
-#   ggtitle("Distribution of % Parcel Area covered by Structures")
-# 
-# png(paste0(Fig_dir,"PercentParcelBldgCovered.png"),width=16,height=9,res=1200,units='in')
-# par(mar=c(5,6,4,1)+.1)
-#  beanplot(PercentParcelBldg ~ Protection*CoBRA_Status, data=b, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "% Parcel Area covered by Structures", cex.main=4,cex.lab=2,cex.axis=1.8, bw="nrd0")
-# legend("bottomright", fill = c("black", "grey"), cex=1.8,
-# legend = c("Unprotected", "Protected"))
-# dev.off()
-# 
-# t<-pairwise.wilcox.test(b$PercentParcelBldg,b$cat,p.adjust.method="bonferroni")
-# write.csv(t$p.value,paste0(Tab_dir,"wilcox_PercentParcelBldg_all.csv"))
-# 
-# png(paste0(Fig_dir,"PercentParcelBldgCovered_State.png"),width=9,height=16,res=1200,units='in')
-# p3+ facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
-# dev.off()
-
 b$NO_NFIP<-0
 b$NO_NFIP[b$CoBRA_Status %in% c("System Unit","OPA")]<-1
 
@@ -2078,52 +1981,10 @@ b$PROT[b$Protection=="Protected" | b$CoBRA_Status=="OPA"]<-1
 b$NO_FED_SUB<-0
 b$NO_FED_SUB[b$CoBRA_Status %in% c("System Unit")]<-1
 
-#m1<-lm(PercentParcelBldg~cat,data=b)
-
 
 #YearBuilt
 b$YearBuiltCensored<-b$YearBuilt
 b$YearBuiltCensored[which(b$YearBuilt<1950)]<-1950
-
-# p4<-ggplot(data=b)+
-#   geom_density(data=subset(b,Protection == "Unprotected"), aes(x=YearBuiltCensored,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
-#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
-#   geom_density(data=subset(b,Protection == "Protected"), aes(x=YearBuiltCensored,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
-#   coord_flip() + 
-#   xlab("Year Built (Censored 1950)") + 
-#   ylab("Smoothed, Scaled Density") + 
-#   facet_grid(~CoBRA_Status) + 
-#  # xlim(0,2000000) + 
-#   scale_fill_brewer(palette="Greys") + 
-#   theme_bw(base_size=20) + 
-#   theme(legend.position="top") + 
-#   scale_color_brewer("") + 
-#   ggtitle("Distribution of Year Built") + 
-#   scale_x_continuous(breaks=seq(1950,2020,10)) +
-#   geom_vline(xintercept=1982, size=2) +
-#   annotate(geom="text",x=1984, y=0, angle=0, label="1983 - Coastal Barrier Resources Act") +
-#   geom_vline(xintercept=1990, size=2) +
-#   annotate(geom="text",x=1992, y=0, angle=0, label="1990 - Coastal Barrier Improvement Act")
-# 
-# png(paste0(Fig_dir,"YearBuilt.png"),width=16,height=9,res=1200,units='in')
-# par(mar=c(5,6,4,1)+.1)
-#  beanplot(YearBuilt ~ Protection*CoBRA_Status, data=b, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Year Built (censored 1950)", cex.main=4,cex.lab=2,cex.axis=1.8, bw="nrd0", ylim=c(1950,2020))
-# legend("bottomright", fill = c("black", "grey"), cex=1.8,
-# legend = c("Unprotected", "Protected"))
-# abline(h=1982, col="red")
-# text(3.5,1983.5, "1982", pos=2)
-# text(3.5,1991.5, "1990",pos=2)
-# abline(h=1990, col= "red")
-# dev.off()
-
-# t<-pairwise.wilcox.test(b$YearBuilt,b$cat,p.adjust.method="bonferroni")
-# write.csv(t$p.value,paste0(Tab_dir,"wilcox_YearBuilt_all.csv"))
-# 
-# 
-# png(paste0(Fig_dir,"YearBuilt_State.png"),width=9,height=16,res=1200,units='in')
-# p4 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
-# dev.off()
-# 
 
 ###SFR
 
@@ -2138,37 +1999,6 @@ m3.f<-tidy(lm(log(sqm)~cat+factor(FIPS),data=r))
 
 m4<-tidy(lm(FPR~cat,data=r))
 m4.f<-tidy(lm(FPR~cat+factor(FIPS),data=r))
-
-# p5<-ggplot(data=r)+
-#   geom_density(data=subset(r,Protection == "Unprotected"), aes(x=FPR,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
-#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
-#   geom_density(data=subset(r,Protection == "Protected"), aes(x=FPR,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
-#   coord_flip() + 
-#   xlab("Footprint Building/Parcel Area (%)") + 
-#   ylab("Smoothed, Scaled Density") + 
-#   facet_grid(~CoBRA_Status) + 
-#  # xlim(0,2000000) + 
-#   scale_fill_brewer(palette="Greys") + 
-#   theme_bw(base_size=20) + 
-#   theme(legend.position="top") + 
-#   scale_color_brewer("") + 
-#   ggtitle("% Residential Parcel Area covered by Building Footprint")
-# 
-# png(paste0(Fig_dir,"PercentParcelBldgCovered_Res.png"),width=16,height=9,res=1200,units='in')
-# par(mar=c(5,6,4,1)+.1)
-#  beanplot(FPR ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = " % Residential Parcel Area covered by Structures", cex.main=4,cex.lab=2,cex.axis=1.8, bw="nrd0",log="")
-# legend("topright", fill = c("black", "grey"), cex=1.8,
-# legend = c("Unprotected", "Protected"))
-# dev.off()
-# 
-# t<-pairwise.wilcox.test(r$FPR,r$cat,p.adjust.method="bonferroni")
-# write.csv(t$p.value,paste0(Tab_dir,"wilcox_FPR_res.csv"))
-# 
-# 
-# png(paste0(Fig_dir,"PercentParcelBldgCovered_ResState.png"),width=9,height=16,res=1200,units='in')
-# p5+ facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
-# dev.off()
-
 
 #YearBuilt, res
 
@@ -2450,39 +2280,7 @@ v$SalesPriceAcre<-v$RealSalesPrice2016/v$Area_Parcel
 
 
 
-png(paste0(Fig_dir,"MarketValue_acre_vacant.png"),width=16,height=9,res=1200,units='in')
-par(mar=c(5,6,4,1)+.1)
-beanplot(LandValue_Acre ~ Protection*CoBRA_Status, data=v, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Market Values (USD/acre)-log scale", cex.main=4,cex.lab=2,cex.axis=1.8, ylim=c(1,10000000))
-legend("bottomright", fill = c("black", "grey"), cex=1.8,
-legend = c("Unprotected", "Protected"))
-dev.off()
-
-t<-pairwise.wilcox.test(v$LandValue_Acre,v$cat,p.adjust.method="bonferroni")
-write.csv(t$p.value,paste0(Tab_dir,"wilcox_LVAcre_Vacant.csv"))
-
-
-
-png(paste0(Fig_dir,"SalesPrice_acre_vacant.png"),width=16,height=9,res=1200,units='in')
-par(mar=c(5,6,4,1)+.1)
-beanplot(SalesPriceAcre ~ Protection*CoBRA_Status, data=v, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Sales Price (2016 USD/acre)-log scale", cex.main=4,cex.lab=2,cex.axis=1.8, ylim=c(10,1000000000))
-legend("bottomright", fill = c("black", "grey"), cex=1.8,
-legend = c("Unprotected", "Protected"))
-dev.off()
-
-t<-pairwise.wilcox.test(v$SalesPriceAcre,v$cat,p.adjust.method="bonferroni")
-write.csv(t$p.value,paste0(Tab_dir,"wilcox_SalesPrivAcre_Vacant.csv"))
-
 library(lfe)
-# m1<-lm(PercentParcelBldg~cat,data=b)
-# m1.f<-lm(PercentParcelBldg~cat+factor(FIPS),data=b)
-# m2<-lm(PercentParcelBldg~cat,data=b[b$Area.bldg>0,])
-# m2.f<-lm(PercentParcelBldg~cat+factor(FIPS),data=b[b$Area.bldg>0,])
-# m3<-lm(log(sqm)~cat,data=r)
-# m3.f<-lm(log(sqm)~cat+factor(FIPS),data=r)
-# m4<-lm(FPR~cat,data=r)
-# m4.f<-lm(FPR~cat+factor(FIPS),data=r)
-# m5<-lm(log(Sales_sqm)~cat,data=s)
-# m5.f<-lm(log(Sales_sqm)~cat+factor(FIPS),data=s)
 
 b$st<-as.factor(b$State)
 b$county<-as.factor(b$FIPS)
