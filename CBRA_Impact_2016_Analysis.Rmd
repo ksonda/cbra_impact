@@ -1,0 +1,2829 @@
+---
+title:  "Does Removing Federal Subsidies Discourage Development? An Evaluation of the Impact of the U.S. Coastal Barrier Resources Act"
+author: "Kyle Onda"
+date: "November 5, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+rm(list=ls())
+#load("D:/Dropbox/Shared CBRA/Analysis/CBRA_Impact_2016/data.RData")
+knitr::opts_chunk$set(echo = TRUE)
+
+
+
+
+```
+
+# Introduction
+
+This R Markdown file documents the code for data cleaning and analysis for the paper "Does Removing Federal Subsidies Discourage Development? An Evaluation of the Impact of the U.S. Coastal Barrier Resources Act". First, set our data directory.
+
+```{r Introduction}
+#library(plyr)
+library(tidyverse)
+library(sp)
+library(rgdal)
+library(rgeos)
+library(raster)
+library(ggExtra)
+library(ggrepel)
+library(ggpubr)
+library(ggpmisc)
+library(knitr)
+library(kableExtra)
+library(sf)
+library(kSamples)
+library(purrr)
+library(tigris)
+library(beanplot)
+library(dotwhisker)
+library(stargazer)
+library(broom)
+library(lfe)
+dir<-"D:/Dropbox/Shared CBRA/"
+Tab_dir<-paste0(dir,"Analysis/CBRA_Impact_2016/Output/Tables/")
+Fig_dir<-paste0(dir,"Analysis/CBRA_Impact_2016/Output/Figures/")
+GIS_dir<-paste0(dir,"Analysis/CBRA_Impact_2016/Output/GIS/")
+```
+
+
+#Sample Frame Creation
+
+This section creates our sample frame. We begin by defining our sample universe of land. Then, we define our sample frame by removing inelegible areas (namely, open water and protected land). Finally, we take a probability sample from the sample frame to create treatment and control areas.
+
+##Sample universe
+First, we create our universe, which consists of a grid of 1${km}^2$ cells intersecting a 2$km$ buffer around the 2017 Coastline of the states of North Carolina, South Carolina, Georgia, Florida, Alabama, Mississippi, Louisiana, and Texas.
+
+
+```{r Sample Universe}
+#Load 1km^2 fishnet. Due to memory issues, this shapefile was created in ArcGIS. It is a 1km fishnet intersecting the union of a 2km buffer of the 2017 TIGERLINE #coastline and the CBRA System Units and OPA polygons
+fishnet<-st_read(paste0(dir,"GISData/fishnet_Clip_8states.shp"))
+
+#Load 2017 TIGER shoreline
+shoreline<-st_read(paste0(dir,"GISData/tl_2017_us_coastline/tl_2017_us_coastline.shp"))
+shoreline<-st_transform(shoreline,st_crs(fishnet)) #set to same projection as fishnet
+
+#Load 2017 State Polygons
+states<-st_read(paste0(dir,"GISData/tl_2017_us_state/tl_2017_us_state.shp"))
+states<-st_transform(states,st_crs(fishnet)) #set to same projection as fishnet
+states<-states[which(states$STUSPS=="AL"| states$STUSPS=="MS" | states$STUSPS=="TX" |states$STUSPS=="LA" |states$STUSPS=="FL" |states$STUSPS=="GA" | states$STUSPS=="NC" |states$STUSPS=="SC"),] #Restrict States to sample states
+
+#Extract shorelines of sample states only
+shoreline<-shoreline[states,]
+
+#Extract fishnet of sample states only
+fishnet<-fishnet[states,]
+
+#Buffer shoreline
+shoreline_buffer<-st_buffer(shoreline,dist=2000)
+shoreline_buffer<-st_union(shoreline_buffer)
+
+#Add CBRS units to shoreline buffer
+CBRA<-st_read(paste0(dir,"CBRS_Polygons/CBRS_Polygons.shp"))
+CBRA<-st_transform(CBRA,st_crs(fishnet))
+CBRA<-CBRA[states,]
+CBRA<-st_union(CBRA)
+# 
+# 
+# shoreline_buffer<-st_union(shoreline_buffer,CBRA)
+# shoreline_buffer<-st_union(shoreline_buffer)
+# 
+# #Extract fishnet of shoreline buffer only
+# fishnet_buffer<-fishnet[shoreline_buffer,]
+# 
+# fishnet_buffer$Cell_ID<-seq.int(1,nrow(fishnet_buffer),by=1) #assign each cell a unique ID number
+# 
+# 
+# #st_write(fishnet_buffer, paste0(dir,"GISData/Fishnet_SampleUniverse_8states.shp"), update = TRUE)
+# 
+# #st_write(fishnet_buffer_st, paste0(dir,"GISData/fishnet_8states_stateDups.shp"), update = TRUE)
+
+
+
+```
+
+##Sample frame
+Then, we calculate each cell's proportion of area that is covered by water (as classified by Conghe 2016) and protected area (as calculated by PAD US) and OPA unit, and CBRS unit. First we do so for CBRA polygons, with separate calculations for OPAs and CBRS units.
+
+###Calulate percent of each sample grid cell covered by CBRS System Unit or OPA
+
+```{r CBRA units}
+#Read in 2017 CBRA polygons
+# CBRA<-st_read(paste0(dir,"CBRS_Polygons/CBRS_Polygons.shp"))
+# CBRA<-st_transform(CBRA,st_crs(fishnet_buffer)) # set to same projection as everything else
+# CBRA<-CBRA[states,]
+# CBRS<-CBRA[which(CBRA$Unit_Type=="System Unit"),] # Separate out system units
+# 
+# #Make CBRS units one polygon
+# CBRS_dissolve<-st_union(CBRS)
+# #CBRS_dissolve<-st_cast(CBRS_dissolve)
+# #CBRS_dissolve<-as_Spatial(CBRS_dissolve)
+# 
+# #Intersect grid with CBRS polygon
+# grid_CBRA_intersect<-st_intersection(fishnet_buffer,CBRS_dissolve)
+# grid_CBRA_intersect$CBRA_PERCENT<-100*st_area(grid_CBRA_intersect)/1000000
+# 
+# 
+# #Make OPA one polygon
+# OPA<-CBRA[which(CBRA$Unit_Type=="Otherwise Protected Area"),] # Separate out Otherwise Protected Areas
+# OPA_dissolve<-st_union(OPA)
+# 
+# 
+# #Intersect grid with OPA polygon
+# grid_OPA_intersect<-st_intersection(fishnet_buffer,OPA_dissolve)
+# grid_OPA_intersect$OPA_PERCENT<-100*st_area(grid_OPA_intersect)/1000000
+# 
+# 
+# 
+# #Join CBRA and OPA percent values to smaple grid
+# grid<-st_join(fishnet_buffer,grid_CBRA_intersect,join=st_contains)
+# grid<-st_join(grid,grid_OPA_intersect,join=st_contains)
+# grid$Cell_ID<-grid$Cell_ID.x
+# grid<-dplyr::select(grid,c(Cell_ID,CBRA_PERCENT,OPA_PERCENT))
+# grid$CBRA_PERCENT[is.na(grid$CBRA_PERCENT)]<-0
+# grid$OPA_PERCENT[is.na(grid$OPA_PERCENT)]<-0
+# 
+# 
+# rm(fishnet,fishnet_buffer,grid_CBRA_intersect,grid_OPA_intersect)
+
+#st_write(grid, paste0(dir,"GISData/SampleUniverse_CBRS.shp"), update = TRUE)
+```
+
+###Calculate percent of each sample grid cell covered by Water and by "Developed" land
+
+Now we do the same for Land Cover, using the 2016 projection of data produced via Automatic Adaptive Signature Generalization of the National Land Cover Database from 2011, as described in the publication "Dannenberg, M., Song, C., and Hakkenberg, C. (2018) A long-term, consistent land cover history of the southeastern United States." *Photogrammatic Enginnering and Remote Sensing*. Unfortunately, this dataset does not completelty conform to NLCD classification, because the NLCD category "Developed, Open Space" could not be classified in the AASG approach, and these areas are portioned out into "Developed, Low Intensity" and other categories. For this anlaysis, we assume the categories "Developed, Low Intensity", "Developed, Medium Intensity", and "Developed, High Intensity" all measure developed surface.
+
+
+
+```{r Land Cover Calculation over Sample Grid}
+
+#Read in Grid with CBRA and OPA percent
+grid<-st_read(paste0(dir,"GISData/SampleUniverse_CBRS.shp"))
+crs<-crs(grid)
+
+#Read in Land Cover Data
+rasterOptions(default=TRUE)
+lc<-raster(paste0(dir,"Development and Value Data/Conghe Land Cover/AASG_2016_Mask_PRJ.tif"))
+lc1<-ratify(lc)
+
+
+
+#lc_cat<-stack(urb_lc,water_lc) #create RasterStrack
+#grid<-st_transform(grid, crs = crs(lc, asText = TRUE))
+grid<-as(grid, "Spatial")
+grid<-spTransform(grid,crs(lc))
+
+
+#Create an Urban categorical raster and a water categorical raster and a land categorical raster
+#urb_lc <- lc1 %in% 21:24 %>% ratify #if Lc is categorical raster. 21 to 24 are categories of urban
+#if Lc is categorical raster. 11 is water
+#water_lc <- lc1 %in% 11 %>% ratify
+land_lc <- lc1 %in% 12:95 %>% ratify
+urb_lc<- lc1 %in% 21:24 %>% ratify
+#wetland_lc<- lc1 %in% 90:95 %>% ratify
+#ag_lc<- lc1 %in% 81:82 %>% ratify
+#dry_wilderness_lc<- lc1 %in% 31:71 %>% ratify
+
+
+
+grid_ex <- extract(land_lc, grid,fun = mean, na.rm = TRUE,df=TRUE) #create vars for proportion
+colnames(grid_ex)<-c("Cell_ID","PropLand")
+
+grid<-merge(grid,grid_ex,by="Cell_ID")
+#grid<-spTransform(grid,st_crs(CBRA))
+grid_st<-st_as_sf(grid)
+#writeOGR(grid,paste0(dir,"GISData"),layer="SampleUniverse_CBRA_Land_sp",driver="ESRI Shapefile")
+
+
+save.image(paste0(dir,"Analysis/CBRA_Impact_2016/data.RData"))
+```
+
+
+
+
+
+Now we restrcit the sample euniverse and take our sample. We sample with probability inversely proportional to distance from the nearest CBRA area.
+
+```{r Sample }
+sample<-st_read(paste0(dir,"GISData/SampleUniverse_CBRA_Land_sp.shp")) #read in sample universe grid
+#flkeys<-st_read(paste0(dir,"GISData/FL_Keys.shp")) #read in dissolved polygon of florida keys, because AASG does not include them
+#flkeys<-st_transform(flkeys,st_crs(sample)) 
+
+#sample_keys<-sample[flkeys,]
+
+#sample<-sample[which(sample$PropLand>0),] #delete cells that are entirely water
+#sample<-rbind(sample,sample_keys) #add back in FL keys which are deleted by above command
+#sample<-unique(sample)
+
+#sample$PropWater<-(1-sample$PropLand)
+
+CBRA_dissolve<-st_union(CBRA) #dissolve polygons to one object
+
+sample$CBRA_dist<-as.numeric(st_distance(sample,CBRA_dissolve)) #calculate distance between each sample grid and the closest point on the CBRA system
+
+#st_write(sample,paste0(dir,"GISData/Sampling/Sample_1km_Ver2.2.shp"))
+
+
+
+
+
+
+```
+
+
+
+
+
+
+Now we take the relevant county areas, dividing into CBRA and NonCBRA portions.
+
+
+
+Then we calculate each cell's proporiton of the remaining area that is covered by CBRS
+
+
+
+
+
+###Count the number of buildings
+
+We use Microsoft building footprints, available from [GitHub](https://github.com/Microsoft/USBuildingFootprints)
+
+First we convert the geojson files to shapefiles
+
+```{r geojson_to_shape}
+# 
+# setwd("D:/Dropbox/Shared CBRA/BuildingFootprints/Microsoft")
+# al<-st_read("Alabama.geojson")
+# st_write(al,"AL.shp")
+# rm(al)
+# 
+# fl<-st_read("Florida.geojson")
+# st_write(fl,"FL.shp")
+# rm(fl)
+# 
+# ga<-st_read("Georgia.geojson")
+# st_write(ga,"GA.shp")
+# rm(ga)
+# 
+# la<-st_read("Louisiana.geojson")
+# st_write(la,"LA.shp")
+# rm(la)
+# 
+# ms<-st_read("Mississippi.geojson")
+# st_write(ms,"MS.shp")
+# rm(ms)
+# 
+# nc<-st_read("NorthCarolina.geojson")
+# st_write(nc,"NC.shp")
+# rm(nc)
+# 
+# sc<-st_read("SouthCarolina.geojson")
+# st_write(sc,"SC.shp")
+# rm(sc)
+# 
+# tx<-st_read("Texas.geojson")
+# st_write(sc,"TX.shp")
+# rm(tx)
+
+
+
+```
+
+Then we extract only those buildings intersecting out sample area
+
+```{r microsoft_bldg_extract}
+
+
+
+tx<-st_read(paste0(dir,"BuildingFootprints/Microsoft/TX.shp"))
+tx<-st_transform(tx,st_crs(sample))
+tx<-tx[sample,]
+st_write(tx,paste0(dir,"BuildingFootprints/tx_clip.shp"))
+
+nc<-st_read(paste0(dir,"BuildingFootprints/Microsoft/NC.shp"))
+nc<-st_transform(nc,st_crs(sample))
+nc<-nc[sample,]
+st_write(nc,paste0(dir,"BuildingFootprints/nc_clip.shp"))
+
+la<-st_read(paste0(dir,"BuildingFootprints/Microsoft/LA.shp"))
+la<-st_transform(la,st_crs(sample))
+la<-la[sample,]
+st_write(la,paste0(dir,"BuildingFootprints/la_clip.shp"))
+
+ms<-st_read(paste0(dir,"BuildingFootprints/Microsoft/MS.shp"))
+ms<-st_transform(ms,st_crs(sample))
+ms<-ms[sample,]
+st_write(ms,paste0(dir,"BuildingFootprints/ms_clip.shp"))
+
+al<-st_read(paste0(dir,"BuildingFootprints/Microsoft/AL.shp"))
+al<-st_transform(al,st_crs(sample))
+al<-al[sample,]
+st_write(al,paste0(dir,"BuildingFootprints/al_clip.shp"))
+
+fl<-st_read(paste0(dir,"BuildingFootprints/Microsoft/FL.shp"))
+fl<-st_transform(fl,st_crs(sample))
+fl<-fl[sample,]
+st_write(fl,paste0(dir,"BuildingFootprints/fl_clip.shp"))
+
+ga<-st_read(paste0(dir,"BuildingFootprints/Microsoft/GA.shp"))
+ga<-st_transform(ga,st_crs(sample))
+ga<-ga[sample,]
+st_write(ga,paste0(dir,"BuildingFootprints/ga_clip.shp"))
+
+sc<-st_read(paste0(dir,"BuildingFootprints/Microsoft/SC.shp"))
+sc<-st_transform(sc,st_crs(sample))
+sc<-sc[sample,]
+st_write(sc,paste0(dir,"BuildingFootprints/sc_clip.shp"))
+
+
+# 
+
+ 
+ al<-st_read(paste0(dir,"BuildingFootprints/al_clip.shp"))
+ fl<-st_read(paste0(dir,"BuildingFootprints/fl_clip.shp"))
+ ms<-st_read(paste0(dir,"BuildingFootprints/ms_clip.shp"))
+ la<-st_read(paste0(dir,"BuildingFootprints/la_clip.shp"))
+ tx<-st_read(paste0(dir,"BuildingFootprints/tx_clip.shp"))
+ ga<-st_read(paste0(dir,"BuildingFootprints/ga_clip.shp"))
+ sc<-st_read(paste0(dir,"BuildingFootprints/sc_clip.shp"))
+ nc<-st_read(paste0(dir,"BuildingFootprints/nc_clip.shp"))
+bldgs<-rbind(tx,nc,la,ms,al,fl,ga,sc)
+rm(tx,nc,la,ms,al,fl,ga,sc)
+# 
+# #cbra join
+ CBRA<-st_read(paste0(dir,"CBRS_Polygons/CBRS_Prohibitions.shp"))
+ CBRA<-st_transform(CBRA,st_crs(sample))
+bldgs_c<-st_join(bldgs,CBRA,largest=TRUE)
+
+
+#st_write(bldgs_c,paste0(dir,"BuildingFootprints/BLDGS_MICROSOFT_SAMPLE.shp"))
+bldgs_c<-st_read(paste0(dir,"BuildingFootprints/BLDGS_MICROSOFT_SAMPLE.shp"))
+save.image(paste0(dir,"Analysis/CBRA_Impact_2016/data.RData"))
+
+```
+
+Now we provide an inventory of development in terms of structures and developed land cover in CBRA units
+
+
+
+```{r CBRA development inventory}
+bldgs_cbra_microsoft<-bldgs_c[which(!is.na(bldgs_c$CBRS_Type)),]
+bldgs_cbra_fws<-st_read(paste0(dir,"Development and Value Data/BuildingFootprints/CBRS_Structure_Points_UNC/CBRS_Structure_Points.shp"))
+bldgs_cbra_fws<-st_transform(bldgs_cbra_fws,st_crs(bldgs_cbra_microsoft))
+bldgs_cbra_fws<-bldgs_cbra_fws[sample,]
+
+CBRA_sample<-CBRA[sample,]
+CBRA_sample$Area_Acres<-as.numeric(st_area(CBRA_sample)*0.000247105)
+CBRA_sample<-as(CBRA_sample,"Spatial")
+
+CBRA_land <- extract(land_lc, CBRA_sample,fun = mean, na.rm = TRUE,df=TRUE) #create vars for proportion
+CBRA_urban<- extract(urb_lc, CBRA_sample,fun = mean, na.rm = TRUE,df=TRUE)
+
+
+colnames(CBRA_land)[2]<-"PropLand"
+colnames(CBRA_urban)[2]<-"PropDeveloped"
+
+CBRA_lc<-cbind(CBRA_sample@data,CBRA_land,CBRA_urban)
+CBRA_lc$Land_Acres<-CBRA_lc$Area_Acres*CBRA_lc$PropLand
+CBRA_lc$Developed_Acres<-CBRA_lc$Area_Acres*CBRA_lc$PropDeveloped
+CBRA_lc$Percent_Developed<-100*CBRA_lc$Developed_Acres/CBRA_lc$Land_Acres
+
+CBRA_lc<-merge(CBRA_sample,CBRA_lc,by=c("OBJECTID","Unit","CBRS_Type","FI_Date","SU_Date","SHAPE_Leng","SHAPE_Area","Area_Acres"))
+
+CBRA_lc<-st_transform(st_as_sf(CBRA_lc),st_crs(bldgs_cbra_microsoft))
+
+bldg_counts_cbra_microsoft<-lengths(st_covers(CBRA_lc,bldgs_cbra_microsoft)) #count Microsoft Buildings in each county area
+bldg_counts_cbra_fws<-lengths(st_covers(CBRA_lc,bldgs_cbra_fws)) #count Microsoft Buildings in each county area
+
+
+#Calculate structures per acre in each CBRA unit
+CBRA_lc<-cbind(CBRA_lc,bldg_counts_cbra_microsoft,bldg_counts_cbra_fws)
+CBRA_lc_collapse<-CBRA_lc %>%
+  group_by(Unit) %>%
+  summarize(Land_Acres=sum(Land_Acres), Developed_Acres=sum(Developed_Acres))
+
+CBRAp<-st_read(paste0(dir,"CBRS Units/New folder/CBRS_Polygons.shp"))
+CBRAp<-st_transform(CBRAp,st_crs(CBRA_lc))
+CBRAp<-CBRAp[sample,]
+bldg_counts_cbra_microsoft<-lengths(st_covers(CBRAp,bldgs_cbra_microsoft)) #count Microsoft Buildings in each county area
+bldg_counts_cbra_fws<-lengths(st_covers(CBRAp,bldgs_cbra_fws)) #count Microsoft Buildings in each county area
+CBRAp<-cbind(CBRAp,bldg_counts_cbra_microsoft,bldg_counts_cbra_fws)
+CBRAp$bldg_diff<-CBRAp$bldg_counts_cbra_microsoft-CBRAp$bldg_counts_cbra_fws
+CBRAp$Structures_per_acre<-CBRAp$bldg_counts_cbra_microsoft/CBRAp$Fast_Acres
+CBRAp$Structures_per_acre[which(CBRAp$bldg_counts_cbra_microsoft==0)]<-0
+
+
+
+
+st_geometry(CBRA_lc_collapse)<-NULL
+
+CBRA_lc_collapse<-merge(CBRAp,CBRA_lc_collapse,by="Unit",all.x=TRUE)
+
+CBRA_lc_collapse$PropLandDeveloped<-CBRA_lc_collapse$Developed_Acres/CBRA_lc_collapse$Land_Acres
+
+CBRA_lc_collapse$DensityCategory<-NA
+CBRA_lc_collapse$DensityCategory[which(CBRA_lc_collapse$Structures_per_acre<0.2)]<-"<0.2 Structures per Acre"
+CBRA_lc_collapse$DensityCategory[which(CBRA_lc_collapse$Structures_per_acre>=0.2)]<-"0.2-0.5 Structures per Acre"
+CBRA_lc_collapse$DensityCategory[which(CBRA_lc_collapse$Structures_per_acre>0.5)]<-">0.5 Structures per Acre"
+
+st_write(CBRA_lc_collapse,paste0(GIS_dir,"CBRA_Sample_Output_v2.shp"))
+
+```
+Here we provide a validation of the counts of bldgs by Microsoft vs Hand Counts by FWS in CBRA areas
+
+```{r Validation}
+attach(CBRA_lc_collapse)
+summary(lm(CBRA_lc_collapse$bldg_counts_cbra_microsoft~CBRA_lc_collapse$bldg_counts_cbra_fws))
+
+my.formula <- bldg_counts_cbra_micrososft ~ bldg_counts_cbra_fws
+p <- ggplot(data = CBRA_lc_collapse, aes(bldg_counts_cbra_fws, bldg_counts_cbra_microsoft)) +
+  geom_smooth(method = "lm", se=FALSE, color="black", formula = my.formula,data=CBRA_lc_collapse) +
+  stat_poly_eq(formula = my.formula, 
+               aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+               parse = TRUE) +         
+  geom_point() + geom_abline(intercept = 0.769, slope = 0.909)  + theme_bw(20) + xlab("Structure count by USFWS") + ylab("Structure count by Microsoft Bldg Footprints") + theme(aspect.ratio=1) + geom_text(x = 450, y = 2700, label = "y=0.77+0.91*x, R2=0.99")
+
+png(paste0(Fig_dir,"Bldg_validation.png"),width=6,height=6,res=1200,units="in")
+p
+dev.off()
+
+
+
+```
+
+Now we provide a summary table of our sample of CoBRA units relative to everywhere else
+
+```{r CoBRA Unit Summary}
+samp_sp<-as(sample,"Spatial")
+samp_sp<-gUnaryUnion(samp_sp)
+samp<-st_as_sf(samp_sp)
+
+CoBRA<-st_read(paste0(dir,"CBRS Units/New folder/CBRS_Polygons.shp"))
+samp<-st_transform(samp,st_crs(CoBRA))
+CoBRA<-st_join(CoBRA,samp)
+
+CoBRA<-st_transform(CoBRA,st_crs(states))
+CoBRA<-st_join(CoBRA,states,largest=TRUE)
+CoBRA$Count=1
+
+st_geometry(CoBRA)<-NULL
+t<-CoBRA %>%
+  group_by(Unit_Type, NAME) %>%
+  summarize(WetAcres=sum(Wet_Acres),FastAcres=sum(Fast_Acres), ShoreMiles=sum(Shore_Mile), Count=sum(Count))
+
+write.csv(t,paste0(dir,"Analysis/CBRA_Impact_2016/Output/Tables/Table1.csv"))
+```
+
+
+
+Now we conduct our county analysis. First we clip out only areas of counties covered by the sample grid. Then we intersect the county sample areas with a dissovled CBRA and OPA polygon, so each county can be decomposed into its CBRA, OPA and non-CBRA portions. Then we calcualte the density of structures per Acre.
+
+```{r Counties}
+options(tigris_class = "sf")
+ST_list<-c("01", #AL
+           "12", #FL
+           "13", #GA
+           "22", #LA
+           "28", #MS
+           "37", #NC
+           "45", #SC
+           "48") #TX
+
+county<-tigris::counties(state=ST_list,year=2016)
+
+county<-st_transform(county,st_crs(sample)) #project county shapefile
+county<-county[sample,] #restrict to only sampled counties
+county<-county[county$STATEFP!=51,] #remove virginia county
+county<-county[sample,]
+
+
+
+#Create function to dissolve sf polygons
+st_dissolve<-function(x,crs_ref) {
+  x_sp<-as(x,"Spatial")
+  x_dissolve<-st_as_sf(gUnaryUnion(x_sp))
+  rm(x_sp)
+  x_dissolve<-st_transform(x_dissolve,st_crs(crs_ref))
+  return(x_dissolve)
+}
+
+#Create single polygon dissolved version of sample grid
+sample_dissolve<-st_dissolve(sample,sample)
+sample_dissolve<-st_cast(sample_dissolve,"POLYGON")
+
+#Create dissolved water polygon
+water_area<-area_water("01","003")
+x<-area_water("01","097")
+
+water_area<-rbind(water_area,x)
+water_area<-st_transform(water_area,st_crs(sample))
+water_area<-st_dissolve(water_area,sample)
+water_area<-st_cast(water_area,"POLYGON")
+water_area<-st_intersection(water_area,sample_dissolve)
+water_area<-st_dissolve(water_area,sample)
+water_area<-st_cast(water_area,"POLYGON")
+
+
+for (i in 2:length(ST_list-1)){
+  st_counties<-county$COUNTYFP[which(county$STATEFP==ST_list[i])]
+  for (j in 1: length(st_counties)){
+    x<-area_water(ST_list[i],st_counties[j])
+    x<-st_transform(x,st_crs(sample))
+    x<-st_dissolve(x,sample)
+    x<-st_cast(x,"POLYGON")
+    x<-st_intersection(x,sample_dissolve)
+    if(length(x$geometry)>0){
+     x<-st_dissolve(x,sample)
+     x<-st_cast(x,"POLYGON")
+    }
+    water_area<-rbind(water_area,x)
+  }
+}
+
+
+water_dissolve<-st_dissolve(water_area,sample)
+water_dissolve<-st_cast(water_dissolve,"POLYGON")
+st_write(water_dissolve,paste0(GIS_dir,"water_area.shp"))
+
+
+#Create Land Area Only sample
+sample_dissolve<-st_cast(sample_dissolve,"MULTIPOLYGON")
+county_land<-st_intersection(county,sample_dissolve)
+
+#county_land<-st_difference(county_land,water_dissolve)
+
+CL<-county_land[c(1),]
+wd<-water_dissolve[CL,]
+CL2<-st_difference(CL,wd)
+
+for (i in 2:length(county_land$GEOID)){
+  CL<-county_land[c(i),]
+  wd<-water_dissolve[CL,]
+  CL<-st_difference(CL,wd)
+  CL2<-rbind(CL2,CL)
+  print(paste0("County part",i,"is done"))
+}
+
+county_land<-CL2
+st_write(county_land,paste0(GIS_dir,"County_Land_Only.shp"))
+
+county_land<-st_read(paste0(GIS_dir,"County_Land_Only.shp"))
+
+#Load CBRA data
+CoBRA<-st_read(paste0(dir,"CBRS Units/New folder/CBRS_Polygons.shp"))
+CoBRA<-st_transform(CoBRA,st_crs(sample))
+CoBRA<-CoBRA[county_land,]
+
+#Intersect County Land with CBRA land
+county_land_CBRA<-st_intersection(county_land,CoBRA)
+st_write(county_land_CBRA,paste0(GIS_dir,"County_Land_CoBRA.shp"))
+county_land_NonCBRA<-st_difference(county_land,CoBRA)
+st_write(county_land_NonCBRA,paste0(GIS_dir,"County_Land_NonCoBRA.shp"))
+
+#Intersect counties with CBRA-classified sample
+county_land_CBRA<-st_read(paste0(GIS_dir,"County_Land_CoBRA.shp"))
+county_land_NonCBRA<-st_read(paste0(GIS_dir,"County_Land_NonCoBRA.shp"))
+county_lc<-rbind(county_land_CBRA,county_land_NonCBRA)
+county_lc<-county_lc[c("STATEFP","GEOID","NAME","Unit_Type")]
+county_lc$Total_Land_Hectares<-as.numeric(st_area(county_lc)/10000)
+
+
+bldg_counts<-lengths(st_covers(county_lc,bldgs_c)) #count Microsoft Buildings in each county area
+
+#Calculate structures per acre in each area type
+county_lc<-cbind(county_lc,bldg_counts)
+county_lc$Structures_per_hectare<-county_lc$bldg_counts/county_lc$Total_Land_Hectares
+county_lc$Type<-"NonCoBRA"
+county_lc$Type[which(county_lc$Unit_Type=="Otherwise Protected Area")]<-"OPA"
+county_lc$Type[which(county_lc$Unit_Type=="System Unit")]<-"SU"
+
+st_write(county_lc,paste0(GIS_dir,"County_Land_Type.shp"))
+
+#county_lc$Structures_per_acre[is.na(county_lc$Structures_per_acre)]<-0
+county_lc<-st_read(paste0(GIS_dir,"County_Land_Type.shp"))
+
+save.image(paste0(dir,"Analysis/CBRA_Impact_2016/PreCluster.RData"))
+# ###PLOT AND SUMMARY TABLE
+# p<-ggplot(CBRA_lc_collapse,aes(x=PropLandDeveloped*100, y=Structures_per_acre, color=Unit_Type)) + 
+#   geom_point(aes(shape=Unit_Type, color=Unit_Type), size=6) +
+#   theme_classic() + 
+#   theme(legend.position="bottom") +
+#   xlab("% Land Urbanized") +
+#   ylab("Structures/Acre") +
+#   theme(text = element_text(size=20), aspect.ratio=1) +
+#   scale_color_grey() +
+#   scale_shape_manual(values=c(19,17)) +
+#   scale_y_continuous(breaks=seq(0,1.2,0.2)) +
+#   geom_hline(yintercept=0.2) +
+#   annotate(geom="text", x=75, y=0.225, label="0.2 Structures/Acre",size=5) +
+#   theme(legend.title = element_blank())
+# 
+# p2<-ggMarginal(p,CBRA_lc_collpase,type="density",groupColour=TRUE,xparams=list(size=1.5),yparams=list(size=1.5))
+# 
+# 
+# png(paste0(dir,"Analysis/CBRA_Impact_2016/Output/Figures/CRBA_Scatter.png"),width=10,height=10,res=1200,units="in")
+# p2
+# dev.off()
+
+table2<-table(CBRA_lc_collapse$Unit_Type,CBRA_lc_collapse$Structures_per_acre>=0.2)
+write.csv(table2,paste0(Tab_dir,"Table2.csv"))
+
+```
+
+
+
+
+
+#County-Level Cluster Analysis
+
+Here, we cluster counties over three variables: Structure density in Non-CBRA area, Structure Density in CBRA area, and ratio of CBRA area that is Otherwise Protected(OPA). We use Ward's hierachical clustering algorith, which minimizes the squared distances within clusters as units are joined together.
+
+```{r CountyClusterAnalysis}
+d<-county_lc
+st_geometry(d)<-NULL
+d<-d%>%group_by(STATEFP,GEOID,NAME,Type)%>%summarise(Total_Land_Hectares=sum(Total_Land_Hectares),bldg_counts=sum(bldg_counts))
+d$Structures_per_hectare<-d$bldg_counts/d$Total_Land_Hectares
+d$Type<-as.factor(d$Type)
+d<-as.data.frame(d)
+d.b<-d[c("STATEFP","GEOID","NAME","Type","Structures_per_hectare")]
+d.a<-d[c("GEOID","Type","Total_Land_Hectares")]
+
+d_wide.b <- d.b %>% spread(Type,Structures_per_hectare,sep=".Str.",fill=NA)
+d_wide.a <- d.a %>% spread(Type,Total_Land_Hectares,sep=".Area.",fill=NA)
+
+d_wide<-merge(d_wide.a,d_wide.b,by="GEOID")
+
+
+
+
+d_wide$Type.Area.SU[which(is.na(d_wide$Type.Area.SU))]<-0
+d_wide$Type.Area.OPA[which(is.na(d_wide$Type.Area.OPA))]<-0
+d_wide$Type.Str.SU[which(d_wide$Type.Area.SU==0)]<-0
+d_wide$Type.Str.OPA[which(d_wide$Type.Area.OPA==0)]<-0
+d_wide$Prop_CBRA_OPA<-d_wide$Type.Area.OPA/(d_wide$Type.Area.OPA+d_wide$Type.Area.SU)
+#d_wide$Prop_CBRA_OPA[which(is.na(d_wide$Type.Area.OPA))]<-0
+
+
+#Take only counties with some CoBRA SU area
+
+c<-d_wide[which(d_wide$Type.Area.OPA!=0 | d_wide$Type.Area.SU!=0),]
+rownames(c)<-paste0(c$NAME,", ",c$STATEFP)
+c$name<-paste0(c$NAME,", ",c$STATEFP)
+
+c$Dens_CBRA<-(c$Type.Str.SU*c$Type.Area.SU+c$Type.Str.OPA*c$Type.Area.OPA)/(c$Type.Area.OPA+c$Type.Area.SU)
+c$Type.Str.CBRA<-pmax(c$Type.Str.OPA,c$Type.Str.SU)
+
+c$log.Type.Str.NonCoBRA<-asinh(c$Type.Str.NonCoBRA)
+c$log.Type.Str.CBRA<-asinh(c$Type.Str.CBRA)
+
+cl<-c[c("log.Type.Str.NonCoBRA","log.Type.Str.CBRA","Prop_CBRA_OPA")]
+
+# #cl<-cl%>%mutate(NonCoBRA.tile= ntile(Type.Str.NonCoBRA,5), CBRA.tile=ntile(pmax(Type.Str.SU,Type.Str.OPA),5))
+# 
+# 
+# # 
+# # cl<-c[c("Type.Str.NonCoBRA","Type.Str.OPA","Type.Str.SU","Prop_CBRA_OPA")]
+# # cl$SU_NC_Diff<-cl$Type.Str.SU-cl$Type.Str.NonCoBRA
+# # cl$OPA_NC_Diff<-cl$Type.Str.OPA-cl$Type.Str.NonCoBRA
+# # 
+# # 
+# # 
+# # cl$Type.Str.NonCoBRA<-sqrt(cl$Type.Str.NonCoBRA)
+# # cl$Type.Str.OPA<-sqrt(cl$Type.Str.OPA)
+# # cl$Type.Str.SU<-sqrt(cl$Type.Str.SU)
+# 
+# # cl$cat_SU<-"0"
+# # cl$cat_SU[which(cl$Type.Str.SU>0)]<-"0-0.5"
+# # cl$cat_SU[which(cl$Type.Str.SU>0.5)]<-">0.5"
+# # cl$cat_NC<-"0"
+# # cl$cat_NC[which(cl$Type.Str.NonCoBRA>0)]<-"0-0.5"
+# # cl$cat_NC[which(cl$Type.Str.NonCoBRA>0.5)]<-">0.5"
+# 
+# #cl2<-scale(cl)
+# 
+# #cl$Type.Str.NonCoBRA[which(cl$Type.Str.NonCoBRA==0&cl$Type.Str.OPA==0 & cl$Type.Str.SU==0)]<-0.0000001
+
+cl<-as.data.frame(scale(cl))
+
+
+
+dist<-dist(cl,method="manhattan")
+fit <- hclust(dist, method="ward.D2")
+plot(fit)
+
+groups <- cutree(fit, k=3)
+rect.hclust(fit, k=3, border="red") 
+
+c.cl<-cbind(c,groups)
+ggplot(c.cl,aes(x=Type.Str.NonCoBRA,y=Type.Str.CBRA))+geom_point(aes(color=as.factor(groups)))+geom_abline(yintercept=0,slope=0.15)
+
+
+c_table<-c.cl %>%
+  group_by(groups) %>%
+  summarize(st_SU=mean(Type.Str.SU), 
+            st_OPA=mean(Type.Str.OPA),
+            st_NonCBRA=mean(Type.Str.NonCoBRA),
+            st_PropCBRA.OPA=mean(Prop_CBRA_OPA))
+
+
+c2 <- gather(c.cl,AreaType,Structures_per_hectare,Type.Str.NonCoBRA,Type.Str.CBRA)
+c2$AreaType<-substr(c2$AreaType,10,nchar(c2$AreaType))
+c2$AreaType[which(c2$AreaType=="OPA")]<-"Otherwise Protected Area"
+c2$AreaType[which(c2$AreaType=="SU")]<-"System Unit"
+c2$cluster<-NA
+c2$cluster[c2$groups==2]<-"CoBRA Unsuccessful"
+c2$cluster[c2$groups==3]<-"CoBRA Successful"
+c2$cluster[c2$groups==1]<-"CoBRA Irrelevant"
+
+
+
+
+c2$cluster<-as.factor(c2$cluster)
+#c2$cluster<-ordered(c2$cluster,levels=c("CoBRA Successful", "CoBRA Unsuccesssful", "CoBRA Irrelevant"))
+
+c2$County<-as.character(c2$NAME)
+c2$State<-NA
+c2$State[c2$STATEFP=="01"]<-"AL"
+c2$State[c2$STATEFP=="28"]<-"MS"
+c2$State[c2$STATEFP=="12"]<-"FL"
+c2$State[c2$STATEFP=="37"]<-"NC"
+c2$State[c2$STATEFP=="48"]<-"TX"
+c2$State[c2$STATEFP=="45"]<-"SC"
+c2$State[c2$STATEFP=="13"]<-"GA"
+c2$State[c2$STATEFP=="22"]<-"LA"
+
+c2$Cols<-1
+c2$Cols[c2$State %in% c("TX","LA","MS","AL")]<-2
+
+c2$State<-as.factor(c2$State)
+c2$State<-ordered(c2$State, levels = c("TX","LA","MS","AL","FL","GA","SC","NC"))
+#################################################################################\
+###################################################
+
+c2<-c2[c2$AreaType!="Otherwise Protected Area",]
+c2$Structures_per_hectare[which(c2$AreaType=="NonCoBRA")]<--c2$Structures_per_hectare[which(c2$AreaType=="NonCoBRA")]
+#c2$Structures_per_hectare
+
+temp<-c[,c("GEOID","Type.Str.NonCoBRA")]
+c2<-merge(c2,temp,by="GEOID")
+
+
+plot_data<-c2 %>% group_by(County)%>% arrange(Type.Str.NonCoBRA,County) 
+
+
+size=36
+size2=2
+size3=18
+c2$AreaType[which(c2$AreaType=="CBRA")]<-"CoBRA"
+temp<-c2[c2$AreaType=="CoBRA",c("GEOID","County","Type.Str.NonCoBRA","State")]
+temp$County<-paste0(temp$County,", ",as.character(temp$State))
+temp$County_order<-factor(temp$County , levels = temp[order(temp$Type.Str.NonCoBRA), 2])
+#temp$County_order<-gsub(",.*$", "", temp$County_order)
+temp$County<-temp$County_order
+#temp<-temp[order(temp$County_order),]
+
+plot_data<-merge(temp,plot_data,by="GEOID")
+plot_data$cluster<-as.character(plot_data$cluster)
+plot_data$cluster[which(plot_data$County.y %in% c("Baldwin","Broward","Charlotte","Okaloosa","Brevard","Bay","Walton","Gulf","Franklin","Currituck","Onslow"))]<-"CoBRA Unsuccessful"
+plot_data<-plot_data[order(plot_data$County_order),]
+levels(plot_data$County.x) <- gsub(",.*$", "", levels(plot_data$County.x))
+
+
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+st_list<-c("TX","LA","MS","AL","FL","GA","SC","NC")
+j=1
+plot_data$cluster<-as.factor(plot_data$cluster)
+library(RColorBrewer)
+myColors <- brewer.pal(3,"Dark2")
+x<-c("NA", rev(levels(plot_data$cluster)))
+names(myColors) <- x
+colScale <- scale_colour_manual(name = "cluster",values = myColors)
+
+  
+p1<-ggplot(plot_data[plot_data$State.x==st_list[1],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
+  geom_line(aes(group = County.x, color=cluster),size=3) +
+  geom_point(aes(color=cluster), size=7, shape=124) +
+  theme_classic() +
+  scale_colour_manual(name = "cluster",values = myColors) +
+  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
+  ylab("Counties (ordered by Density in Non-System area)") + 
+  theme(axis.title.x = element_text(hjust=0.0)) +
+  theme(legend.title = element_blank()) +
+   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
+    #xlim(-4.5,4.5)+
+  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("TX") + theme(plot.title = element_text(hjust = 0.5))  + colScale
+
+p2<-ggplot(plot_data[plot_data$State.x==st_list[2],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
+  geom_line(aes(group = County.x, color=cluster),size=3) +
+  geom_point(aes(color=cluster), size=7, shape=124) +
+  theme_classic() +
+  scale_colour_manual(name = "cluster",values = myColors) +
+  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
+  ylab("Counties (ordered by Density in Non-System area)") + 
+  theme(axis.title.x = element_text(hjust=0.0)) +
+  theme(legend.title = element_blank()) +
+   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
+    #xlim(-4.5,4.5)+
+  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("LA") + theme(plot.title = element_text(hjust = 0.5))  + colScale
+
+p3<-ggplot(plot_data[plot_data$State.x==st_list[3],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
+  geom_line(aes(group = County.x, color=cluster),size=3) +
+  geom_point(aes(color=cluster), size=7, shape=124) +
+  theme_classic() +
+  scale_colour_manual(name = "cluster",values = myColors) +
+  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
+  ylab("Counties (ordered by Density in Non-System area)") + 
+  theme(axis.title.x = element_text(hjust=0.0)) +
+  theme(legend.title = element_blank()) +
+   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
+    #xlim(-4.5,4.5)+
+  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("MS") + theme(plot.title = element_text(hjust = 0.5))  + colScale
+
+p4<-ggplot(plot_data[plot_data$State.x==st_list[4],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
+  geom_line(aes(group = County.x, color=cluster),size=3) +
+  geom_point(aes(color=cluster), size=7, shape=124) +
+  theme_classic() +
+  scale_colour_manual(name = "cluster",values = myColors) +
+  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
+  ylab("Counties (ordered by Density in Non-System area)") + 
+  theme(axis.title.x = element_text(hjust=0.0)) +
+  theme(legend.title = element_blank()) +
+   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
+    #xlim(-4.5,4.5)+
+  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("AL") + theme(plot.title = element_text(hjust = 0.5))  + colScale
+
+
+p5<-ggplot(plot_data[plot_data$State.x==st_list[5],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
+  geom_line(aes(group = County.x, color=cluster),size=3) +
+  geom_point(aes(color = cluster),size=7, shape=124) +
+  theme_classic() +
+  scale_color_grey() + 
+  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
+  ylab("Counties (ordered by Density in Non-System area)") + 
+  theme(axis.title.x = element_text(hjust=0.0)) +
+  theme(legend.title = element_blank()) +
+   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
+    #xlim(-4.5,4.5)+
+  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("FL") + theme(plot.title = element_text(hjust = 0.5))  + colScale
+
+p6<-ggplot(plot_data[plot_data$State.x==st_list[6],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
+  geom_line(aes(group = County.x, color=cluster),size=3) +
+  geom_point(aes(color = cluster),size=7, shape=124) +
+  theme_classic() +
+  scale_color_grey() + 
+  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
+  ylab("Counties (ordered by Density in Non-System area)") + 
+  theme(axis.title.x = element_text(hjust=0.0)) +
+  theme(legend.title = element_blank()) +
+   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
+    #xlim(-4.5,4.5)+
+  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("GA") + theme(plot.title = element_text(hjust = 0.5))  + colScale
+
+p7<-ggplot(plot_data[plot_data$State.x==st_list[7],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
+  geom_line(aes(group = County.x, color=cluster),size=3) +
+  geom_point(aes(color = cluster),size=7, shape=124) +
+  theme_classic() +
+  scale_color_grey() + 
+  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
+  ylab("Counties (ordered by Density in Non-System area)") + 
+  theme(axis.title.x = element_text(hjust=0.0)) +
+  theme(legend.title = element_blank()) +
+   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
+    #xlim(-4.5,4.5)+
+  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("SC") + theme(plot.title = element_text(hjust = 0.5))  + colScale
+
+p8<-ggplot(plot_data[plot_data$State.x==st_list[8],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
+  geom_line(aes(group = County.x, color=cluster),size=3) +
+  geom_point(aes(color = cluster),size=7, shape=124) +
+  theme_classic() +
+  scale_color_grey() + 
+  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
+  ylab("Counties (ordered by Density in Non-System area)") + 
+  theme(axis.title.x = element_text(hjust=0.0)) +
+  theme(legend.title = element_blank()) +
+   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
+    #xlim(-4.5,4.5)+
+  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("NC") + theme(plot.title = element_text(hjust = 0.5))  + colScale
+
+
+
+png(paste0(Fig_dir,"CountyClusterLinePlot_SU_vs_NonCoBRA_1.png"),width=15,height=22/4,res=1200,units="in")
+multiplot(p1,p2,p3,p4,cols=4)
+
+dev.off()
+
+
+png(paste0(Fig_dir,"CountyClusterLinePlot_SU_vs_NonCoBRA_2.png"),width=15,height=22/4,res=1200,units="in")
+multiplot(p5,p6,p7,p8,cols=4)
+
+dev.off()
+
+png(paste0(Fig_dir,"CountyClusterLinePlot_SU_vs_NonCoBRA_new.png"),width=15,height=22/4,res=1200,units="in")
+multiplot(p1,p2,p3,p4,p5,p6,p7,p8,cols=8)
+
+dev.off()
+
+
+plot_data$label<-NA
+plot_data$label[which(plot_data$AreaType=="NonCoBRA")]<-as.character(plot_data$County.x[which(plot_data$AreaType=="NonCoBRA")])
+
+
+
+
+
+png(paste0(Fig_dir,"CountyClusterLinePlot_SU_vs_NonCoBRA_1.png"),width=11,height=11,res=1200,units="in")
+p1 
+
+library(ggrepel)
+
+p1<-ggplot(plot_data, aes(Structures_per_hectare, County_order, label=label)) + theme_grey(base_size = 16) +
+    geom_vline(xintercept=0, size=1)+ 
+  geom_line(aes(group = County.x, color=cluster),size=2) +
+  geom_point(aes(color = cluster),size=3) + 
+  geom_text_repel(force=1,
+                  nudge_x=-5,
+                  direction="both",
+                  hjust=1,
+                  seed = 435435, aes(size=10)) +
+  theme_classic() +
+  colScale + 
+  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid")) +     facet_grid(. ~ State.x ,scales = "fixed", space = "fixed",switch='y') + 
+  ylab("Counties (ordered by Density in Non-CoBRA area)") + 
+  theme(axis.title.x = element_text(hjust=0.5, size=16)) +
+    theme(axis.title.y = element_text(hjust=0.5, size=16)) +
+  theme(legend.title = element_blank()) +
+   theme(legend.position = "none") + scale_x_continuous(limit=c(-9.5,2.5),breaks=c(-4,-3,-2,-1,0,1,2),labels=c(4,3,2,1,0,1,2)) +
+  xlab("In Non-CoBRA Areas<---------Structures/Hectare--------->In CoBRA Areas") +
+  guides(color=guide_legend(ncol=2)) +
+  theme(axis.text.y = element_blank()) + 
+  theme(axis.text.x = element_text(size=14)) + 
+    theme(strip.text.x = element_text(size = 14)) 
+
+png(paste0(Fig_dir,"CountyClusterLinePlot_SU_vs_NonCoBRA_1.png"),width=20,height=10,res=1200,units="in")
+p1 
+dev.off()
+
+
+p2<-ggplot(plot_data[plot_data$Cols==2,], aes(Structures_per_hectare, County.x, label=label)) + theme_grey(base_size = 18) +
+    geom_vline(xintercept=0, size=1)+ 
+  geom_line(aes(group = County.x, color=cluster),size=1.5) +
+  geom_point(aes(color = cluster),size=3) + 
+  geom_text_repel(force=0.5,
+                  nudge_x=2,
+                  direction="both",
+                  hjust=0,
+                  seed = 4354365) +
+  theme_classic() +
+  colScale + 
+  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid")) +     facet_grid(. ~ State.x ,scales = "fixed", space = "fixed",switch='y') + 
+  ylab("Counties (ordered by Density in Non-System area)") + 
+  theme(axis.title.x = element_text(hjust=0.5, size=16)) +
+    theme(axis.title.y = element_text(hjust=0.5, size=16)) +
+  theme(legend.title = element_blank()) +
+   theme(legend.position = "none") + scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
+  xlab("In Non-System Areas<---------Structures/Hectare--------->In System Areas") +
+  guides(color=guide_legend(ncol=2)) +
+  theme(axis.text.y = element_blank()) + 
+  theme(axis.text.x = element_text(size=14)) + 
+    theme(strip.text.x = element_text(size = 20))
+
+png(paste0(Fig_dir,"CountyClusterLinePlot_SU_vs_NonCoBRA_2.png"),width=13,height=6,res=1200,units="in")
+p2
+dev.off()
+
+ClusterCounties<-plot_data[c("GEOID","County.x","cluster")]
+ClusterCounties<-distinct(ClusterCounties)
+ClusterCounties$GEOID<-as.character(ClusterCounties$GEOID)
+ClusterCounties$County.x<-as.character(ClusterCounties$County.x)
+ClusterCounties$cluster<-as.character(ClusterCounties$cluster)
+
+Counties_Clustered<-county[c("GEOID","STATEFP")]
+Counties_Clustered$GEOID<-as.character(Counties_Clustered$GEOID)
+
+Counties_Clustered<-merge(Counties_Clustered,ClusterCounties,by="GEOID",all.x=TRUE)
+Counties_Clustered$cluster<-gsub("CBRA","CoBRA",Counties_Clustered$cluster)
+Counties_Clustered$cluster[is.na(Counties_Clustered$cluster)]<-"No CoBRA Units"
+st_write(Counties_Clustered,paste0(GIS_dir,"CountiesClustered_vMay12.shp"))
+
+```
+
+
+
+
+
+#Processing Zillow Data
+
+##Taking only sample parcels
+
+First we iterate through a list of county shapefiles
+
+```{r Take sample parcels}
+#sample_dissolve<-st_read(paste0(dir,"GISData/Sampling/Sample_1km_Ver2.2.shp"))
+
+#List relevant county parcel shapefiles
+l<-list.files(path = paste0(dir,"CoastlineCountyParcels/NationalParcelMap/Raw_Parcels"), pattern = "Parcels.shp.xml", all.files = FALSE,
+           full.names = TRUE, recursive = TRUE,
+           ignore.case = FALSE, include.dirs = TRUE, no.. = FALSE)
+
+l <- substr(l,1,nchar(l)-4)
+fips<-substr(l,nchar(l)-16,nchar(l)-12) #list relevant county parcel shapes
+
+#save path directory
+ZTRAX_dir<-"D:/CBRA/"
+
+
+for (i in 79:length(l)){
+  p<-st_read(l[i],stringsAsFactors=FALSE)
+  p<-st_transform(p,st_crs(sample))
+  p<-p[sample,]
+  p<-st_zm(p)
+  st_write(p,paste0(ZTRAX_dir,"Parcels_FIPS2/SampleParcels_FIPS_",fips[i],".shp"))
+}
+
+
+```
+
+##Matching APNs
+
+```{r CreateZillowTablesCounty, eval=FALSE}
+setwd("D:/CBRA/")
+library(maptools)
+library(readxl)
+library(data.table)
+
+
+#Read all required Zillow layout information
+#  Pull in layout information
+layoutZAsmt <- read_excel(file.path('Layout.xlsx'), sheet = 1)
+layoutZTrans <- read_excel(file.path('Layout.xlsx'), 
+                           sheet = 2,
+                           col_types = c("text", "text", "numeric", "text", "text"))
+
+
+col_namesMain <- layoutZAsmt[layoutZAsmt$TableName == 'utMain', 'FieldName']
+col_namesBldg <- layoutZAsmt[layoutZAsmt$TableName == 'utBuilding', 'FieldName']
+col_namesBldgA <- layoutZAsmt[layoutZAsmt$TableName == 'utBuildingAreas', 'FieldName']
+col_namesValue <- layoutZAsmt[layoutZAsmt$TableName == 'utValue', 'FieldName']
+col_namesSale <- layoutZAsmt[layoutZAsmt$TableName == 'utSaleData', 'FieldName']
+
+##List of couties
+l<-as.numeric(as.character(county$GEOID))
+
+#Reads in State Zillow files, selects sampled counties, splits into county files
+#source("Code/AL_Zillow.R")
+#source("Code/FL_Zillow.R")
+#source("Code/GA_Zillow.R")
+#source("Code/LA_Zillow.R")
+#source("Code/MS_Zillow.R")
+#source("Code/NC_Zillow.R")
+#source("Code/SC_Zillow.R")
+#source("Code/TX_Zillow.R")
+
+
+
+```
+Here we match the Zillow data to selected parcel GIS data
+
+```{r COuntyMergeCode, eval=FALSE}
+setwd("D:/CBRA")
+CBRA<-st_read(paste0(dir,"CBRS Units/New folder/CBRS_Polygons.shp"))
+CBRA<-st_transform(CBRA,st_crs(sample))
+CBRA<-CBRA[sample,]
+CBRS<-as(CBRA,"Spatial")
+
+SU<-CBRS[which(CBRS$Unit_Type=="System Unit"),]
+SU<-gUnaryUnion(SU)
+OPA<-CBRS[which(CBRS$Unit_Type=="Otherwise Protected Area"),]
+OPA<-gUnaryUnion(OPA)
+
+
+
+
+#Alabama
+source("Code/AL_CountyMergeCode/AL_01003.R") #done
+source("Code/AL_CountyMergeCode/AL_01097.R") #done
+
+#Florida
+source("Code/FL_CountyMergeCode/FL_12005.R") #done
+source("Code/FL_CountyMergeCode/FL_12009.R") #done
+source("Code/FL_CountyMergeCode/FL_12011.R") #done
+source("Code/FL_CountyMergeCode/FL_12015.R") #done
+source("Code/FL_CountyMergeCode/FL_12017.R") #done
+source("Code/FL_CountyMergeCode/FL_12021.R") #done
+source("Code/FL_CountyMergeCode/FL_12029.R") #done
+source("Code/FL_CountyMergeCode/FL_12031.R") #done  
+source("Code/FL_CountyMergeCode/FL_12033.R") #done
+source("Code/FL_CountyMergeCode/FL_12035.R") #done
+source("Code/FL_CountyMergeCode/FL_12037.R") #done
+source("Code/FL_CountyMergeCode/FL_12045.R") #done #53?
+
+source("Code/FL_CountyMergeCode/FL_12053.R") #done
+
+
+
+
+
+source("Code/FL_CountyMergeCode/FL_12057.R") #done
+source("Code/FL_CountyMergeCode/FL_12061.R") #done
+source("Code/FL_CountyMergeCode/FL_12065.R")
+
+source("Code/FL_CountyMergeCode/FL_12071.R") #done
+source("Code/FL_CountyMergeCode/FL_12075.R") #done
+
+source("Code/FL_CountyMergeCode/FL_12081.R")
+
+source("Code/FL_CountyMergeCode/FL_12085.R") #done #81?
+source("Code/FL_CountyMergeCode/FL_12086.R")
+
+source("Code/FL_CountyMergeCode/FL_12087.R")#done #87?
+source("Code/FL_CountyMergeCode/FL_12089.R") #done
+
+source("Code/FL_CountyMergeCode/FL_12091.R") #done
+
+source("Code/FL_CountyMergeCode/FL_12099.R") #done #91?
+source("Code/FL_CountyMergeCode/FL_12101.R") #done 
+source("Code/FL_CountyMergeCode/FL_12103.R") #done
+source("Code/FL_CountyMergeCode/FL_12109.R") #done
+source("Code/FL_CountyMergeCode/FL_12111.R") #done #113?
+
+source("Code/FL_CountyMergeCode/FL_12113.R")
+
+source("Code/FL_CountyMergeCode/FL_12115.R") #done
+source("Code/FL_CountyMergeCode/FL_12123.R") #done
+source("Code/FL_CountyMergeCode/FL_12127.R") #done
+source("Code/FL_CountyMergeCode/FL_12129.R") #done
+source("Code/FL_CountyMergeCode/FL_12131.R") #done
+
+
+#Georgia
+source("Code/GA_CountyMergeCode/GA_13029.R") #done
+source("Code/GA_CountyMergeCode/GA_13039.R") #done
+source("Code/GA_CountyMergeCode/GA_13051.R") #done
+source("Code/GA_CountyMergeCode/GA_13127.R") #done
+source("Code/GA_CountyMergeCode/GA_13179.R") #done 
+source("Code/GA_CountyMergeCode/GA_13191.R") #done
+
+#Louisiana
+source("Code/LA_CountyMergeCode/LA_22023.R")
+source("Code/LA_CountyMergeCode/LA_22045.R") 
+source("Code/LA_CountyMergeCode/LA_22051.R") #No parcels actually selected
+source("Code/LA_CountyMergeCode/LA_22057.R")
+source("Code/LA_CountyMergeCode/LA_22071.R")
+source("Code/LA_CountyMergeCode/LA_22075.R")
+source("Code/LA_CountyMergeCode/LA_22087.R")
+source("Code/LA_CountyMergeCode/LA_22101.R") #No GIS maps available...anywhere
+source("Code/LA_CountyMergeCode/LA_22103.R") #Only 2 parcels, neither with APN
+source("Code/LA_CountyMergeCode/LA_22109.R")
+source("Code/LA_CountyMergeCode/LA_22113.R")
+
+#Mississippi
+source("Code/MS_CountyMergeCode/MS_28045.R") #done
+source("Code/MS_CountyMergeCode/MS_28047.R") #done 
+source("Code/MS_CountyMergeCode/MS_28059.R") #done
+
+#North Carolina
+source("Code/NC_CountyMergeCode/NC_37019.R") #done
+source("Code/NC_CountyMergeCode/NC_37031.R") #done
+source("Code/NC_CountyMergeCode/NC_37053.R") #done
+source("Code/NC_CountyMergeCode/NC_37055.R") #done
+source("Code/NC_CountyMergeCode/NC_37095.R") #done
+source("Code/NC_CountyMergeCode/NC_37129.R") #done
+source("Code/NC_CountyMergeCode/NC_37133.R") #done
+source("Code/NC_CountyMergeCode/NC_37141.R") #done
+
+#South Carolina
+source("Code/SC_CountyMergeCode/SC_45013.R") #done
+source("Code/SC_CountyMergeCode/SC_45019.R") #done
+source("Code/SC_CountyMergeCode/SC_45029.R") #done
+source("Code/SC_CountyMergeCode/SC_45043.R") #done
+source("Code/SC_CountyMergeCode/SC_45051.R") #done
+source("Code/SC_CountyMergeCode/SC_45053.R") #done
+
+
+
+
+#Texas
+source("Code/TX_CountyMergeCode/TX_48007.R") #done
+source("Code/TX_CountyMergeCode/TX_48039.R") #done
+source("Code/TX_CountyMergeCode/TX_48057.R") #done
+source("Code/TX_CountyMergeCode/TX_48061.R") #done
+source("Code/TX_CountyMergeCode/TX_48071.R") #done
+source("Code/TX_CountyMergeCode/TX_48167.R") #done
+source("Code/TX_CountyMergeCode/TX_48201.R")
+source("Code/TX_CountyMergeCode/TX_48239.R") #done #239
+source("Code/TX_CountyMergeCode/TX_48245.R") #done #239
+#source("Code/TX_CountyMergeCode/TX_48261.R") #no actual parcels selected
+source("Code/TX_CountyMergeCode/TX_48273.R") 
+source("Code/TX_CountyMergeCode/TX_48321.R") #done
+source("Code/TX_CountyMergeCode/TX_48355.R") #done
+#source("Code/TX_CountyMergeCode/TX_48361.R") # no actual parcels selected
+source("Code/TX_CountyMergeCode/TX_48489.R") #done
+
+```
+
+## Extract Zillow data and Calculate spatial Parcel characteristics
+
+Here we pre-process all available data. We export only the Zillow parcel data from sampled parcels and from variables of interest, and calculate the percentage of each parcel covered by CBRA Sytem Units, CBRA Otherwise Protected Area, land from the USGS Protected Areas Database, and Microsoft Building Footprints.
+
+```{r Combine Zillow Data and Parcel data}
+
+#sample<-st_read(paste0(dir,"GISData/Sampling/Sample_1km_Ver2.2.shp"))
+crs<-st_crs(sample)
+sample<-st_as_sf(gUnaryUnion(as(sample,"Spatial")))
+sample<-st_transform(sample,crs)
+sample<-st_cast(sample, "MULTIPOLYGON") %>% st_cast("POLYGON")
+
+
+setwd("D:/CBRA")
+Zlist<-list.files(path="Parcel_Merge_CSV",recursive=TRUE,full.names=TRUE,include.dirs=TRUE,pattern="*.csv")
+Plist <- list.files(path="Parcel_Merge_SHP",recursive=TRUE,full.names=TRUE,include.dirs=TRUE,pattern="*.shp")
+varlist<-c("key",
+           "ImportParcelID","BuildingOrImprovementNumber",
+           "FIPS",
+           "State",
+           "County",
+           "PropertyFullStreetAddress",
+           "NoOfBuildings",
+           "LotSizeAcres",
+           "LotSizeSquareFeet",
+           "YearBuilt",
+           "NoOfUnits",
+           "TotalRooms",
+           "TotalBedrooms",
+           "FullBath",
+           "ThreeQuarterBath",
+           "HalfBath",
+           "QuarterBath",
+           "PropertyLandUseStndCode",
+           "RecordingDate",
+           "DocumentDate"
+           ,"SalesPriceAmount",
+           "DocumentTypeStndCode",
+           "LandAssessedValue","ImprovementAssessedValue",
+           "TotalAssessedValue",
+           "AssessmentYear",
+           "LandMarketValue",
+           "ImprovementMarketValue",
+           "TotalMarketValue",
+           "sqfeet","PropertyAddressLongitude","PropertyAddressLatitude","PropertyAddressCensusTractAndBlock")
+
+z<-read.csv(Zlist[1],stringsAsFactors = FALSE)
+z$FIPS<-substr(Zlist[1],21,25)
+z<-z[,varlist]
+
+for (i in 2:length(Zlist)){
+ z2<-read.csv(Zlist[i],stringsAsFactors = FALSE)
+ z2$FIPS<-substr(Zlist[i],21,25)
+ z2<-z2[,varlist]
+ z2$key<-as.character(z2$key)
+ z<-bind_rows(z,z2)
+ print(paste0(Zlist[i]," is complete"))
+}
+
+z$key<-paste0(z$key,".",z$FIPS)
+write.csv(z,paste0("D:/CBRA_Kyle/","ZillowParcelsData.csv"))
+
+setwd("D:/CBRA")
+Zlist<-list.files(path="Parcel_Merge_CSV",recursive=TRUE,full.names=TRUE,include.dirs=TRUE,pattern="*.csv")
+Plist <- list.files(path="Parcel_Merge_SHP",recursive=TRUE,full.names=TRUE,include.dirs=TRUE,pattern="*.shp")
+varlist<-c("key","FIPS")
+
+p<-st_read(Plist[1],stringsAsFactors = FALSE)
+p$FIPS<-substr(Plist[1],21,25)
+p<-p[,varlist]
+
+for (i in 2:length(Plist)){
+ p2<-st_read(Plist[i],stringsAsFactors = FALSE)
+ p2<-st_transform(p2,st_crs(p))
+p2$FIPS<-substr(Plist[i],21,25)
+ p2<-p2[,varlist]
+ p2$key<-as.character(p2$key)
+ p<-rbind(p,p2)
+ print(paste0(Plist[i]," is complete"))
+ p<-p[,varlist]
+}
+
+
+
+p$key<-as.character(paste0(p$key,".",p$FIPS))
+p<-p[,c("key")]
+p<-as(p,"Spatial")
+writeOGR(p, dsn="D:/Dropbox/Shared CBRA/Analysis/CBRA_Impact_2016/Output/GIS", layer="AllParcels_kF",driver="ESRI Shapefile", overwrite_layer=TRUE)
+```
+
+Now we calculate parcel overlap with OPA, COBRA System Units, and other protected areas.
+```{r}
+p<-st_read(paste0(dir,"Analysis/CBRA_Impact_2016/Output/GIS/AllParcels_kF.shp"),stringsAsFactors=FALSE)
+#p2<-p
+#p2$fips<-substr(p2$key,nchar(p2$key)-4,nchar(p2$key))
+
+#county_p<-st_cast(county,"POLYGON")
+#county_p<-county_p[,c("GEOID")]
+#county_p$FIPS<-as.character(county_p$GEOID)
+#p<-st_transform(p,st_crs(sample))
+#p<-st_join(p,county_p,largest=TRUE)
+#p<-p[,c("key","FIPS")]
+sample_dissolve<-as(sample,"Spatial")
+sample_dissolve<-gUnaryUnion(sample_dissolve)
+sample_dissolve<-st_as_sf(sample_dissolve)
+sample_dissolve<-st_cast(sample_dissolve,"POLYGON")
+
+p$Area_Parcel<-as.numeric(st_area(p))*0.000247105
+p<-st_cast(p, "MULTIPOLYGON") %>% st_cast("POLYGON")
+p.sp<-as(p,"Spatial")
+#p_ex <- extract(urb_lc, p.sp,fun = mean, na.rm = TRUE,df=TRUE) #create vars for proportion
+
+n<-1000
+p.clip<-p[c(1:n),]
+sample_dissolve<-st_transform(sample_dissolve,st_crs(p))
+p.clip<-st_intersection(p.clip,sample_dissolve)
+
+
+
+l<-length(p$key)
+parts<-as.integer(l/n)
+  
+    for (j in 1:parts){
+      start=1+j*n
+      end=min((j+1)*n,l)
+    
+      p2<-p[c(start:end),]
+      p_s<-st_intersection(p2,sample_dissolve)
+      print(paste0(j,". Parcels from part",j+1," of ",parts+1," are intersected"))
+      p.clip<-rbind(p.clip,p_s)
+      
+    }
+  
+
+p<-p.clip
+
+
+p$Area_clip<-as.numeric(st_area(p))*0.000247105
+st_write(p,paste0(GIS_dir,"Parcels_SampleClip.shp"))
+p<-st_read(paste0(GIS_dir,"Parcels_SampleClip.shp"))
+
+
+##Classify CBRA land further into PAD land
+county_types<-st_read(paste0(GIS_dir,"County_Land_Type.shp"))
+county_types2<-st_cast(county_types,"POLYGON")
+county_types2$CBRA_CAT<-as.character(county_types2$Type)
+
+
+
+pad<-st_read(paste0(dir,"Development and Value Data/Protected Lands/PAD_dissolve_fixed.shp"))
+pad<-st_transform(pad,st_crs(p))
+pad<-st_cast(pad,"POLYGON")
+pad<-st_buffer(pad,0)
+pad$PAD_CAT<-"Protected"
+pad<-pad[county_types2,]
+
+county_types_pad<-st_intersection(county_types2,pad)
+county_types_pad$CBRA_Cat<-NA
+st_write(county_types_pad,paste0(GIS_dir,"County_Land_Type_PAD.shp"))
+
+county_types_nonPad<-st_difference(county_types2,pad)
+county_types_nonPad$cat<-NA
+st_write(county_types_pad,paste0(GIS_dir,"County_Land_Type_NonPAD.shp"))
+
+
+
+#Categorize Parcels
+county_types_pad<-st_read(paste0(GIS_dir,"County_Land_Type_PAD.shp"))
+county_types_pad$cat<-NA
+county_types_pad$cat<-paste0(county_types_pad$Type,", Protected")
+
+county_types_nonPad<-st_read(paste0(GIS_dir,"County_Land_Type_NonPAD.shp"))
+county_types_nonPad$cat<-NA
+county_types_nonPad$cat<-paste0(county_types_nonPad$Type,", Not Protected")
+
+
+county_types<-rbind(county_types_pad, county_types_nonPad)
+county_types<-st_cast(county_types,"POLYGON")
+county_types$cat[which(county_types$Type=="OPA")]<-"OPA"
+county_types<-county_types[c("Type","cat")]
+
+#Extract land area by type
+
+
+n<-1000
+p.lc<-p[c(1:n),]
+c.lc<-county_types[p.lc,]
+p.lc<-st_intersection(p.lc,c.lc)
+
+
+
+l<-length(p$key)
+parts<-as.integer(l/n)
+  
+    for (j in 1:parts){
+      start=1+j*n
+      end=min((j+1)*n,l)
+      p2<-p[c(start:end),]
+      c.lc<-county_types[p2,]
+      p_s<-st_intersection(p2,c.lc)
+      print(paste0(j,". Parcels from part",j+1," of ",parts+1," are intersected"))
+      p.lc<-rbind(p.lc,p_s)
+      
+    }
+
+p.lc$cat[which(p.lc$Type=="OPA")]<-"OPA"
+  
+st_write(p.lc,paste0(GIS_dir,"Parcels_Categorized.shp"))
+p.lc<-st_read(paste0(GIS_dir,"Parcels_Categorized.shp"),stringsAsFactors = FALSE)
+
+p.lc$Area_cat<-as.numeric(st_area(p.lc))*0.000247105
+p.lc$key<-as.character(p.lc$key)
+
+p.csv<-p.lc
+st_geometry(p.csv)<-NULL
+p.csv<-p.csv%>%group_by(key,cat)%>%summarise(Area_Parcel=mean(Ar_Prcl),Area_clip=mean(Are_clp),Area_cat=sum(Area_cat))
+
+write.csv(p.csv,paste0(Tab_dir,"Parcels_Categorized.csv"))
+
+
+###Same thing but buildings
+
+p<-st_cast(p.lc, "MULTIPOLYGON") %>% st_cast("POLYGON")
+b<-bldgs_c[,c("FID","CBRS_Type")]
+b$Area_sqft<-st_area(b)*10.7639
+b<-st_buffer(b,0)
+b$count_bldgs=1
+p.b<-st_intersection(p,b)
+
+p.b$Area.bldg.acres<-as.numeric(st_area(p.b))*0.000247105
+st_geometry(p.b)<-NULL
+p.bldg<-p.b%>%group_by(key,cat)%>%summarise(Area.bldg=sum(Area.bldg.acres))
+write.csv(p.bldg,paste0(Tab_dir,"Parcels_Area_bldg_byCat.csv"))
+
+
+#Count bldgs
+b.centroid<-st_centroid(b)
+p.cent<-st_join(b.centroid,p)
+st_geometry(p.cent)<-NULL
+
+
+p.cent<-p.cent%>%group_by(key,cat)%>%summarise(Count.bldgs=sum(count_bldgs))
+write.csv(p.cent,paste0(Tab_dir,"Parcels_Bldg_Counts_byCat.csv"))
+
+
+#rm(list=setdiff(ls(), c("pz","sample","SU","OPA","urb_lc","land_lc","bldgs_c","county","dir","Fig_dir","GIS_dir","Tab_dir")))
+save.image("D:/Dropbox/Shared CBRA/Analysis/CBRA_Impact_2016/ZillowCompiled.RData")
+
+
+```
+
+#Analysis
+
+Finally we begin analyzing the dataset
+
+##Assemble Analysis Data
+
+```{r Assemble}
+rm(list=ls())
+dir<-"D:/Dropbox/Shared CBRA/"
+Zdir<-"D:/CBRA_Kyle/"
+Tab_dir<-paste0(dir,"Analysis/CBRA_Impact_2016/Output/Tables/")
+Fig_dir<-paste0(dir,"Analysis/CBRA_Impact_2016/Output/Figures/")
+GIS_dir<-paste0(dir,"Analysis/CBRA_Impact_2016/Output/GIS/")
+
+parcels<-read.csv(paste0(Tab_dir,"Parcels_Categorized.csv"),stringsAsFactors=FALSE)
+bldg<-read.csv(paste0(Tab_dir,"Parcels_Area_bldg_byCat.csv"),stringsAsFactors=FALSE) 
+bldg.count<-read.csv(paste0(Tab_dir,"Parcels_Bldg_Counts_byCat.csv"),stringsAsFactors=FALSE)
+
+
+zillow<-read.csv(paste0(Zdir,"ZillowParcelsData.csv"),stringsAsFactors=FALSE)
+parcelKeyFix<-c("37095","12031","48273","22087","37019")
+zillow$key[which(zillow$FIPS %in% parcelKeyFix)]<-gsub(".","..",zillow$key[which(zillow$FIPS %in% parcelKeyFix)],fixed=TRUE)
+
+
+
+
+d<-merge(parcels,bldg,by=c("key","cat"),all.x=TRUE)
+d<-merge(d,bldg.count,by=c("key","cat"),all.x=TRUE)
+d<-merge(d,zillow,by="key",all.x=TRUE)
+
+d<-d[,c(1,2,4:6,8,10,12:44)]
+BuildingParcelCheck<-d
+
+BuildingParcelCheck$Count.bldgs[which(is.na(BuildingParcelCheck$Count.bldgs))]<-0
+
+BuildingParcelCheck<-BuildingParcelCheck%>%mutate(Prop.NonCBRA.NotProtected=(Area_cat/Area_clip)*(cat=="NonCoBRA, Not Protected"))
+BuildingParcelCheck<-BuildingParcelCheck%>%mutate(Prop.NonCBRA.Protected=(Area_cat/Area_clip)*(cat=="NonCoBRA, Protected"))
+BuildingParcelCheck<-BuildingParcelCheck%>%mutate(Prop.OPA=(Area_cat/Area_clip)*(cat=="OPA"))
+BuildingParcelCheck<-BuildingParcelCheck%>%mutate(Prop.SU.NotProtected=(Area_cat/Area_clip)*(cat=="SU, Not Protected"))
+BuildingParcelCheck<-BuildingParcelCheck%>%mutate(Prop.SU.Protected=(Area_cat/Area_clip)*(cat=="SU, Protected"))
+
+BuildingParcelCheck<-BuildingParcelCheck%>%mutate(Bldgs.NonCBRA.NotProtected=(Count.bldgs)*(cat=="NonCoBRA, Not Protected"))
+BuildingParcelCheck<-BuildingParcelCheck%>%mutate(Bldgs.NonCBRA.Protected=(Count.bldgs)*(cat=="NonCoBRA, Protected"))
+BuildingParcelCheck<-BuildingParcelCheck%>%mutate(Bldgs.OPA=(Count.bldgs)*(cat=="OPA"))
+BuildingParcelCheck<-BuildingParcelCheck%>%mutate(Bldgs.SU.NotProtected=(Count.bldgs)*(cat=="SU, Not Protected"))
+BuildingParcelCheck<-BuildingParcelCheck%>%mutate(Bldgs.SU.Protected=(Count.bldgs)*(cat=="SU, Protected"))
+
+BuildingParcelCheck$ZillowMatch<-!is.na(BuildingParcelCheck$ImportParcelID)
+
+BuildingParcelCheck<-BuildingParcelCheck%>%group_by(key)%>%summarize(ZillowMatch=sum(ZillowMatch),Bldgs.NonCBRA.NotProtected=sum(Bldgs.NonCBRA.NotProtected,na.rm=TRUE),Bldgs.NonCBRA.Protected=sum(Bldgs.NonCBRA.Protected,na.rm=TRUE),Bldgs.OPA=sum(Bldgs.OPA,na.rm=TRUE),Bldgs.SU.NotProtected=sum(Bldgs.SU.NotProtected,na.rm=TRUE),Bldgs.SU.Protected=sum(Bldgs.SU.Protected,na.rm=TRUE), Prop.SU.Protected=sum(Prop.SU.Protected,na.rm=TRUE),  Prop.SU.NotProtected=sum(Prop.SU.NotProtected,na.rm=TRUE), Prop.NonCBRA.Protected=sum(Prop.NonCBRA.Protected,na.rm=TRUE),Prop.NonCBRA.NotProtected=sum(Prop.NonCBRA.NotProtected,na.rm=TRUE),Prop.OPA=sum(Prop.OPA,na.rm=TRUE),StndCode=first(PropertyLandUseStndCode),YearBuilt=mean(YearBuilt,na.rm=TRUE), Area=sum(Area_clip,na.rm=TRUE), FIPS=first(FIPS))                                                        
+                                                            
+                                                      
+BuildingParcelCheck<-left_join(BuildingParcelCheck,LU2,by="StndCode")                                         
+BuildingParcelCheck$LU_SubClass[which(is.na(BuildingParcelCheck$LU_SubClass))]<-"No Zillow Match"            
+
+BuildingParcelCheck$MissingCategory<-NA
+BuildingParcelCheck$MissingCategory[which(!is.na(BuildingParcelCheck$YearBuilt) & (BuildingParcelCheck$Bldgs.NonCBRA.NotProtected+BuildingParcelCheck$Bldgs.NonCBRA.Protected+BuildingParcelCheck$Bldgs.SU.NotProtected+BuildingParcelCheck$Bldgs.SU.Protected+BuildingParcelCheck$Bldgs.OPA)>0)]<-"Correct: Building and Yearbuilt"
+
+BuildingParcelCheck$MissingCategory[which(!is.na(BuildingParcelCheck$YearBuilt) & (BuildingParcelCheck$Bldgs.NonCBRA.NotProtected+BuildingParcelCheck$Bldgs.NonCBRA.Protected+BuildingParcelCheck$Bldgs.SU.NotProtected+BuildingParcelCheck$Bldgs.SU.Protected+BuildingParcelCheck$Bldgs.OPA)==0)]<-"Incorrect: No Building but Yearbuilt"
+
+BuildingParcelCheck$MissingCategory[which(is.na(BuildingParcelCheck$YearBuilt) & (BuildingParcelCheck$Bldgs.NonCBRA.NotProtected+BuildingParcelCheck$Bldgs.NonCBRA.Protected+BuildingParcelCheck$Bldgs.SU.NotProtected+BuildingParcelCheck$Bldgs.SU.Protected+BuildingParcelCheck$Bldgs.OPA)==0)]<-"Correct: No Building and No Yearbuilt"
+
+
+BuildingParcelCheck$MissingCategory[which(is.na(BuildingParcelCheck$YearBuilt) & (BuildingParcelCheck$Bldgs.NonCBRA.NotProtected+BuildingParcelCheck$Bldgs.NonCBRA.Protected+BuildingParcelCheck$Bldgs.SU.NotProtected+BuildingParcelCheck$Bldgs.SU.Protected+BuildingParcelCheck$Bldgs.OPA)>0)]<-"Incorrect:  Building but No Yearbuilt"
+
+BuildingParcelCheck$BldgPresent<-((BuildingParcelCheck$Bldgs.NonCBRA.NotProtected+BuildingParcelCheck$Bldgs.NonCBRA.Protected+BuildingParcelCheck$Bldgs.SU.NotProtected+BuildingParcelCheck$Bldgs.SU.Protected+BuildingParcelCheck$Bldgs.OPA)>0)
+
+BuildingParcelCheck$cat<-"Split"
+BuildingParcelCheck$cat[which(BuildingParcelCheck$Prop.SU.Protected>0.9)]<-"SU, Protected"
+BuildingParcelCheck$cat[which(BuildingParcelCheck$Prop.SU.NotProtected>0.9)]<-"SU, Not Protected"
+BuildingParcelCheck$cat[which(BuildingParcelCheck$Prop.NonCBRA.Protected>0.9)]<-"NonCBRA, Protected"
+BuildingParcelCheck$cat[which(BuildingParcelCheck$Prop.NonCBRA.NotProtected>0.9)]<-"NonCBRA, Not Protected"
+BuildingParcelCheck$cat[which(BuildingParcelCheck$Prop.OPA>0.9)]<-"OPA"
+
+#BuildingParcelCheck$YearBuilt[which(is.nan(BuildingParcelCheck$YearBuilt))]
+
+#Table of buildings and whetehr missing year built by category.
+library(lfe)
+summary(felm(is.nan(YearBuilt)~cat |FIPS| 0| FIPS,data=BuildingParcelCheck[which(BuildingParcelCheck$BldgPresent>0),]))
+model<-felm(is.na(YearBuilt)~cat |0| 0| FIPS,data=BuildingParcelCheck[which(BuildingParcelCheck$BldgPresent>0),])
+model1.fe<-felm(is.na(YearBuilt)~cat |FIPS| 0| FIPS,data=BuildingParcelCheck[which(BuildingParcelCheck$BldgPresent>0),])
+
+
+data2<-BuildingParcelCheck[which(is.na(BuildingParcelCheck$YearBuilt)),]
+model2<-felm(as.numeric(BldgPresent)~cat|0|0|FIPS ,data=data2, weights=data2$Area)
+model2.noweight<-felm(as.numeric(BldgPresent)~cat|0|0|FIPS ,data=data2)
+model2.fe<-felm(as.numeric(BldgPresent)~cat|FIPS|0|FIPS ,data=data2, weights=data2$Area)
+model2.fe.noweight<-felm(as.numeric(BldgPresent)~cat|FIPS|0|FIPS ,data=data2)
+
+
+data3<-BuildingParcelCheck[which(BuildingParcelCheck$BldgPresent==0),]
+model3<-felm(!is.na(YearBuilt)~cat|0|0|FIPS ,data=data3, weights=data3$Area)
+model3.fe<-felm(!is.na(YearBuilt)~cat|FIPS|0|FIPS ,data=data3, weights=data3$Area)
+    
+
+stargazer(model,model1.fe,model2,model2.fe,model3,model3.fe,type="html",out=paste0(Zdir,"MissingYearBuilt.html"))
+
+#Table of land with built year that does not have a building
+
+summary(lm(is.na(YearBuilt)~cat + factor(FIPS),data=BuildingParcelCheck[which(BuildingParcelCheck$BldgPresent>0),]))
+
+prop.table(table(BuildingParcelCheck$MissingCategory,BuildingParcelCheck$LU_SubClass),2)
+
+d$Area<-d$Area_cat
+
+b<-d%>%distinct(ImportParcelID, .keep_all=TRUE)#bldg level
+
+p<-d %>% distinct(FIPS,Area_Parcel,Area_clip,Area_cat,Area.bldg,Count.bldgs,cat,PropertyLandUseStndCode, .keep_all=TRUE) #parcel level
+p$LU_missing<-0
+p$LU_missing[which(p$PropertyLandUseStndCode=="" | is.na(p$PropertyLandUseStndCode))]<-1
+p<-p[order(p$PropertyFullStreetAddress,-p$LU_missing),]
+#p<-p%>%distinct(coords, .keep_all=TRUE)
+#rm(list=setdiff(ls(), c("p","b","dir","Fig_dir","GIS_dir","Tab_dir","Zdir")))
+p$count=1
+b$count=1
+#rm(parcels,su,opa,pad,zillow)
+
+
+
+
+```
+
+```{r}
+ load("D:/Dropbox/Shared CBRA/Analysis/CBRA_Impact_2016/RegressionPrep.RData")
+yb<-d
+yb<-yb%>%group_by(YearBuilt,cat,State)%>%summarize(Bldg_count=sum(NoOfBuildings,na.rm=TRUE),sqft=sum(sqfeet,na.rm=TRUE))
+yb.area<-d%>%group_by(cat,State)%>%summarize(Area=sum(Area_clip))
+yb<-left_join(yb,yb.area,by=c("cat","State"))
+
+yb<-yb%>%group_by(cat,State)%>%mutate(cumulative_bldgs=cumsum(Bldg_count),cumulative_sqft=cumsum(sqft))
+yb$bldg_ha<-yb$cumulative_bldgs/(yb$Area*0.404686)
+yb$FAR<-yb$cumulative_sqft/(yb$Area*43560)
+yb$Year<-yb$YearBuilt
+
+
+yb<-filter(yb,!is.na(State))
+
+pdf(file=paste0(Fig_dir,"timeseries_state_bldg_ha.pdf"),width=6.5,height=9)
+  ggplot(yb,aes(x=Year,y=bldg_ha,col=cat)) + geom_line(lwd=1) + xlim(c(1950,2016)) +     scale_y_continuous(trans='log10',labels=comma) + facet_wrap(~ State, ncol=2) + theme_bw() + theme(legend.position="top") + ylab("log10 Buildings per Hectare")
+dev.off()
+
+
+pdf(file=paste0(Fig_dir,"timeseries_state_bldg_count.pdf"),width=6.5,height=9)
+  ggplot(yb,aes(x=Year,y=cumulative_bldgs,col=cat)) + geom_line(lwd=1) + xlim(c(1950,2016)) +     scale_y_continuous(trans='log10',labels=comma) + facet_wrap(~ State, ncol=2) + theme_bw() + theme(legend.position="top") + ylab("log10 Building Count")
+dev.off()
+
+pdf(file=paste0(Fig_dir,"timeseries_state_FAR.pdf"),width=6.5,height=9)
+  ggplot(yb,aes(x=Year,y=FAR,col=cat)) + geom_line(lwd=1) + xlim(c(1950,2016)) +     scale_y_continuous(trans='log10',labels=comma) + facet_wrap(~ State, ncol=2) + theme_bw() + theme(legend.position="top") + ylab("log10 FAR")
+dev.off()
+
+pdf(file=paste0(Fig_dir,"timeseries_state_sqft.pdf"),width=6.5,height=9)
+  ggplot(yb,aes(x=Year,y=cumulative_sqft,col=cat)) + geom_line(lwd=1) + xlim(c(1950,2016)) +     scale_y_continuous(trans='log10',labels=comma) + facet_wrap(~ State, ncol=2) + theme_bw() + theme(legend.position="top") + ylab("log10 Total Sq ft")
+dev.off()
+```
+
+
+##Basic Acreage Table by Parcel
+```{r}
+p2<-p
+p2$Prop.Bldg<-p2$Area.bldg/p2$Area_cat
+p2$count=1
+
+
+tab2<-p2[,c("key","Area_cat","cat","count","State","Area.bldg","Count.bldgs")]
+
+
+tab2$Area<-tab2$Area_cat
+tab2<-tab2%>% group_by(cat) %>% summarise(Hectares=sum(Area,na.rm=TRUE)*0.404686, Count=sum(count), Bldg_Hectares=sum(Area.bldg,na.rm=TRUE)*0.404686, Count_bldgs=sum(Count.bldgs,na.rm=TRUE))
+tab2$Area_Percent<-100*tab2$Hectares/sum(tab2$Hectares)
+tab2$Count_Percent<-100*tab2$Count/sum(tab2$Count)
+
+tab2$Bldg_Coverage<-tab2$Bldg_Hectares/tab2$Hectares
+tab2$Str_per_hectare<-tab2$Count_bldgs/tab2$Hectares
+
+write.csv(tab2,paste0(Tab_dir,"AcreageTable.csv"))
+```
+
+##Figures and Tables: Land Use
+
+```{r}
+###Code Land Use
+
+####Redo Land use Table
+LU2<-read.csv("D:/CBRA_Kyle/LU2.csv",stringsAsFactors=FALSE)
+LU2$PropertyLandUseStndCode<-as.character(LU2$StndCode)
+
+p3<-merge(p2,LU2,by="PropertyLandUseStndCode",all.x=TRUE)
+
+#Set unreliable land to "unknown"
+#p3$LU_SubClass[p3$PropertyLandUseStndCode==""]<-"No Data"
+#p3$LU_SubClass[is.na(p3$LU_Class)]<-"No Data"
+p3$LU_SubClass[which(p3$FIPS==22023)]<-NA #This county was wrong
+
+
+p3$StCode<-substr(as.character(p3$FIPS),1,2)
+p3$State[p3$StCode=="10"]<-"AL"
+p3$State[p3$StCode=="12"]<-"FL"
+p3$State[p3$StCode=="13"]<-"GA"
+p3$State[p3$StCode=="22"]<-"LA"
+p3$State[p3$StCode=="28"]<-"MS"
+p3$State[p3$StCode=="37"]<-"NC"
+p3$State[p3$StCode=="45"]<-"SC"
+p3$State[p3$StCode=="48"]<-"TX"
+
+lu_tab<-p3%>%group_by(State,cat,LU_Class,LUPrefix,PropertyLandUseStndCode,PropertyLandUseDescription) %>% summarise(Hectares=sum(Area_cat,na.rm=TRUE)*0.404686, Count=sum(count,na.rm=TRUE))
+
+p3$Structures_Acre<-p3$Count.bldgs/p3$Area_cat
+p3$StructureDensity<-"0 Structures/Hectare"
+p3$StructureDensity[which(p3$Structures_Acre>0)]<-"Between 0 and 0.49 Structures/Hectare"
+p3$StructureDensity[which(p3$Structures_Acre>=0.2)]<-"Greater than 0.49 Structures/Hectare"
+
+###Building Cateogrization
+
+p3$Area_thousand<-p3$Area*.404686/1000
+p3$X.x<-NULL
+p3$X<-NULL
+p3$X.y<-NULL
+B<-p3%>%group_by(StructureDensity,cat)%>%summarise(Area_thousand=sum(Area_thousand))
+B2<-p3%>%group_by(cat)%>%summarise(Area_thousand_cat=sum(Area_thousand))
+
+B<-merge(B,B2,by="cat")
+B$Area_prop<-B$Area_thousand/B$Area_thousand_cat
+
+Bldg_Area_Cat<-ggplot(B,aes(y=Area_prop,x=StructureDensity)) + 
+  geom_bar(stat="identity") + 
+  coord_flip()  + 
+  theme_bw(base_size = 20) + 
+  scale_fill_brewer(palette="Greys") +
+  ggtitle("% Area of Parcels by CoBRA Category and Structure Density")+
+  xlab("CoBRA Category") + ylab("Area (%)") +
+  theme(legend.position="bottom") +
+  facet_grid(cols=vars(cat),labeller = labeller(cat = label_wrap_gen(16), StructureDensity=label_wrap_gen(16)),switch="y") + theme(axis.title.y=element_blank())
+
+png(paste0(Fig_dir,"Bldg_Area_Cat.png"),width=16,height=4,res=1200,units='in')
+Bldg_Area_Cat
+dev.off()
+
+# B.s<-p3%>%group_by(StructureDensity,cat,State)%>%summarise(Area_thousand=sum(Area_thousand))
+# 
+# 
+# Bldg_Area_Cat_State<-ggplot() + 
+#   geom_bar(aes(y = Area_thousand, x = cat, fill = StructureDensity), data = B.s, stat="identity") + coord_flip()  +
+#   facet_grid(rows=vars(State),switch="y") +
+#   theme_bw(base_size=20) + 
+#   scale_fill_brewer(palette="Greys") +
+#   ggtitle("Area of Parcels by CoBRA Category and Structure Density, by State")+
+#   xlab("CoBRA Category") + ylab("Area (1000s Acres)") +
+#   theme(legend.position="bottom")
+# 
+# 
+# png(paste0(Fig_dir,"Bldg_Area_Cat_State.png"),width=16,height=9,res=1200,units='in')
+# Bldg_Area_Cat_State
+# dev.off()
+# 
+# Bldg_Area_Cat_State_percent<-ggplot() + 
+#   geom_bar(aes(y = Area_thousand, x = cat, fill = StructureDensity), data = B.s, stat="identity", position="fill") + coord_flip()  +
+#   theme_bw(base_size = 20) + 
+#   facet_grid(rows=vars(State), switch="y") +
+#   scale_fill_brewer(palette="Greys") +
+#   ggtitle("Area (%) of Parcels by CoBRA Category and Structure Density, by State") +
+#   xlab("CoBRA Category") + ylab("Area (%)") +
+#   theme(legend.position="bottom") 
+
+
+# png(paste0(Fig_dir,"Bldg_Area_Cat_State_percent.png"),width=16,height=9,res=1200,units='in')
+# Bldg_Area_Cat_State_percent
+# dev.off()
+
+
+##Land use within categories
+p3$LU<-as.character(p3$LU_SubClass)
+p3$LU[which(is.na(p3$LU))]<-"Other or Not Classified"
+p3$LU<-factor(p3$LU,levels(factor(p3$LU))[c(4,6,7,8,1,3,5,2)])
+
+
+
+
+LU<-p3
+
+#LU<-LU[which(!is.na(LU$LU)),]
+LU.s<-LU%>%group_by(LU,cat)%>%summarise(LUArea=sum(Area_cat))
+areas<-LU%>%group_by(cat)%>%summarise(Area=sum(Area_cat))
+
+LU<-merge(LU.s,areas,by=c("cat"))
+
+LU$perc<-100*LU$LUArea/LU$Area
+
+LU$cat[LU$cat=="NonCoBRA, Not Protected"]<-"Non-CoBRA, unprotected"
+LU$cat[LU$cat=="NonCoBRA, Protected"]<-"Non-CoBRA, protected"
+
+LU$cat[LU$cat=="SU, Not Protected"]<-"CoBRA unit, unprotected"
+LU$cat[LU$cat=="SU, Protected"]<-"CoBRA unit, protected"
+
+LU$cat<-factor(LU$cat,levels(factor(LU$cat))[c(2,1,3,5,4)])
+
+
+library(RColorBrewer)
+
+LU$Devcat<-"Developed"
+LU$Devcat[LU$LU %in% c("Other or Not Classified", "Open Space", "Agriculture", "Zoned Vacant Lots")]<-"Undeveloped"
+LU$Devcat[LU$LU=="Government/Military"]<-""
+
+Bldg_Area_Cat_LU<-ggplot(LU,aes(y=perc, x=LU, fill=LU)) + 
+  geom_bar(stat="identity",position="dodge") + 
+  coord_flip()  + 
+  theme_bw(base_size = 20) + 
+ scale_fill_manual(values = rev(brewer.pal(8,"Paired"))) +
+  ggtitle("(%) Area Land Use Categories (Zillow) by Development Disincentive Category") + ylab("(%) Area") + theme(axis.title.y=element_blank()) +
+  theme(legend.position="none") +
+  facet_grid(rows=vars(Devcat),cols=vars(cat),labeller = labeller(cat = label_wrap_gen(16)),scales="free_y",space="free_y",switch="y")
+
+dat_text1 <- data.frame(
+   txt = c("a","b","c","d","e",
+     "Subtotal: 11.4%", "Subtotal: 0.7%", "Subtotal: 15.4%","Subtotal: 6.3%","Subtotal: 0.4%",
+          "Subtotal: 11.4%", "Subtotal: 0.7%", "Subtotal: 15.4%","Subtotal: 6.3%","Subtotal: 0.4%"
+             ),
+
+   perc = 50,
+   y=1
+ )
+
+LU_tab<-LU%>%group_by(cat,Devcat)%>%summarise(perc=sum(perc))
+LU_tab$perc<-round(LU_tab$perc,1)
+LU_tab$label<-paste0("Subtotal: ", LU_tab$perc,"%")
+
+
+
+Bldg_Area_Cat_LU2<-Bldg_Area_Cat_LU +  geom_text(data=LU_tab,aes(y=40,x=1,label = label),inherit.aes=FALSE, size=6)
+ # geom_vline(xintercept = 3.5, col='black', lwd=2)
+Bldg_Area_Cat_LU2
+
+tiff(paste0(Fig_dir,"Land_Use_Pecent_overall2.tiff"),width=16,height=9,res=1200,units='in')
+Bldg_Area_Cat_LU2
+dev.off()
+
+
+
+LU<-p3
+#LU<-LU[which(!is.na(LU$LU)),]
+LU.s<-LU%>%group_by(LU,cat,State)%>%summarise(LUArea=sum(Area_cat))
+areas<-LU%>%group_by(cat,State)%>%summarise(Area=sum(Area_cat))
+
+LU<-merge(LU.s,areas,by=c("cat","State"))
+
+LU$perc<-100*LU$LUArea/LU$Area
+
+Bldg_Area_Cat_LU_ST3<-ggplot(LU,aes(y=perc, x=LU, fill=LU)) + 
+  geom_bar(stat="identity",position="dodge") + 
+  coord_flip()  + 
+  theme_bw(base_size = 20) + 
+  scale_fill_viridis_d() +
+  ggtitle("(%) Area Land Use Categories (Zillow) by CoBRA Category")+
+  xlab("CoBRA Category") + ylab("(%) Area") +
+  theme(legend.position="none") +
+  facet_grid(cols=vars(cat),rows=vars(State),labeller = labeller(cat = label_wrap_gen(16))) + 
+  geom_vline(xintercept = 4.5, col='black', lwd=2)
+
+png(paste0(Fig_dir,"Land_Use_Pecent_overall_st.png"),width=16,height=9,res=1200,units='in')
+Bldg_Area_Cat_LU_ST
+dev.off()
+
+
+LU<-p3%>%group_by(LU,StructureDensity,cat)%>%summarise(LUArea=sum(Area_cat))
+areas<-p3%>%group_by(StructureDensity,cat)%>%summarise(Area=sum(Area_cat))
+LU<-merge(LU,areas,by=c("StructureDensity","cat"))
+LU$perc<-100*LU$LUArea/LU$Area
+
+LU<-LU[which(!is.na(LU$LU)),]
+
+
+
+Bldg_Area_Cat_LU<-ggplot(LU,aes(y=perc, x=LU, fill=LU)) + 
+  geom_bar(stat="identity",position="dodge") + 
+  coord_flip()  + 
+  ggtitle("Area of Parcels by CoBRA Category and Structure Density") +
+  theme_bw(base_size = 20) + 
+  scale_fill_viridis_d() +
+  ggtitle("(%) Area Land Use Categories (Zillow) by CoBRA Category and Structure Density")+
+  xlab("CoBRA Category") + ylab("(%) Area") +
+  theme(legend.position="bottom") +
+  facet_grid(rows=vars(StructureDensity),cols=vars(cat),labeller = labeller(cat = label_wrap_gen(16), StructureDensity=label_wrap_gen(16)),switch="y")
+
+png(paste0(Fig_dir,"Land_Use_Pecent_density.png"),width=16,height=9,res=1200,units='in')
+Bldg_Area_Cat_LU
+dev.off()
+
+
+
+
+
+LU.st<-p3%>%group_by(LU,cat,State)%>%summarise(LUArea=sum(Area_cat))
+areas<-p3%>%group_by(cat,State)%>%summarise(Area=sum(Area_cat))
+LU.st<-merge(LU.st,areas,by=c("cat","State"))
+LU.st$perc<-100*LU.st$LUArea/LU.st$Area.x
+
+
+Bldg_Area_Cat_LU_state<-ggplot(LU.st,aes(y=perc, x=LU, fill=LU)) + 
+  geom_bar(stat="identity",position="dodge") + 
+  coord_flip()  + 
+  ggtitle("Area of Parcels by CoBRA Category and Structure Density") +
+  theme_bw(base_size = 20) + 
+  scale_fill_viridis_d() +
+  ggtitle("(%) Area Land Use Categories (Zillow) by CoBRA Category  and State")+
+  xlab("CoBRA Category") + ylab("(%) Area") +
+  theme(legend.position="bottom") +
+  facet_grid(rows=vars(State),cols=vars(cat),labeller = labeller(cat = label_wrap_gen(16)),switch="y")
+
+png(paste0(Fig_dir,"Land_Use_Percent_State.png"),width=9,height=16,res=1200,units='in')
+Bldg_Area_Cat_LU_state
+dev.off()
+
+
+
+# 
+# 
+# Overall<-ggplot() + geom_bar(aes(y = Area, x=State,fill=cat), data = p3,
+#                            stat="identity") + scale_fill_brewer(palette="RdYlBu") + coord_flip() +
+# theme_classic(base_size = 20) 
+# 
+# png(paste0(Fig_dir,"Overallclss.png"),width=16,height=9,res=1200,units='in')
+# Overall
+# dev.off()
+# 
+# Overall_percent<-ggplot() + geom_bar(aes(y = Area, x=State,fill=cat), data = p3, position="fill",
+#                            stat="identity") + scale_fill_brewer(palette="RdYlBu") + coord_flip() + scale_y_continuous(labels = scales::percent)  +
+# theme_classic(base_size = 20) 
+# 
+# png(paste0(Fig_dir,"Overallclss_percent.png"),width=16,height=9,res=1200,units='in')
+# Overall_percent
+# dev.off()
+# 
+# 
+# 
+# LU_all_percent<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_Class), data = p3, position="fill",
+#                            stat="identity") + coord_flip()  +
+# theme_classic(base_size = 20) 
+# 
+# png(paste0(Fig_dir,"LU_percent.png"),width=16,height=9,res=1200,units='in')
+# LU_all_percent
+# dev.off()
+# 
+# LU_all_percent_state<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_Class), data = p3, position="fill",
+#                            stat="identity") + coord_flip()  +
+# theme_classic(base_size = 20) + facet_grid(rows=vars(State))
+# 
+# png(paste0(Fig_dir,"LU_percent_state.png"),width=16,height=9,res=1200,units='in')
+# LU_all_percent_state
+# dev.off()
+# 
+# 
+# LU_all<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_Class), data = p3,
+#                            stat="identity") + coord_flip()  +
+# theme_classic(base_size = 20) 
+# 
+# png(paste0(Fig_dir,"LU_all.png"),width=16,height=9,res=1200,units='in')
+# LU_all
+# dev.off()
+# 
+# #Undeveloped SubTable
+# p3$X[which(p3$LU_Class=="No Data")]<-"No Data"
+# p3$LU_Class[which(is.na(p3$LU_Class))]<-"No Data"
+# p3$LU_Class[which(p3$LU_Class=="No Data")]<-"Unknown"
+# p.NB<-p3[which(p3$StructureDensity!="Greater than 0.2 Structures/Acre"),]
+# LU_NB<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_Class), data = p.NB,
+#                            stat="identity", position="dodge") + coord_flip()  +
+# theme_classic(base_size = 20) + scale_fill_brewer(palette="Dark2")
+# 
+# png(paste0(Fig_dir,"LU_NB.png"),width=16,height=9,res=1200,units='in')
+# LU_all
+# dev.off()
+# 
+# 
+# 
+# 
+# 
+# #Residential SubTable
+# p.res<-p3[which(p3$LU_Class=="Residential"),]
+# 
+# Res_Type<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_SubClass), data = p.res, position="fill",
+#                            stat="identity") + coord_flip()  +
+# theme_classic(base_size = 20) 
+# 
+# png(paste0(Fig_dir,"Res_Type.png"),width=16,height=9,res=1200,units='in')
+# Res_Type
+# dev.off()
+# 
+# Res_Type_sum<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_SubClass), data = p.res,
+#                            stat="identity") + coord_flip()  +
+# theme_classic(base_size = 20) 
+# 
+# png(paste0(Fig_dir,"Res_Type_sum.png"),width=16,height=9,res=1200,units='in')
+# Res_Type_sum
+# dev.off()
+# 
+# Res_Type_state<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_SubClass), data = p.res, position="fill",
+#                            stat="identity") + coord_flip()  +
+# theme_classic(base_size = 20) + facet_grid(rows=vars(State))
+# 
+# png(paste0(Fig_dir,"Res_Type_state.png"),width=16,height=9,res=1200,units='in')
+# Res_Type_state
+# dev.off()
+# 
+# 
+# Res_Type_state_sum<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_SubClass), data = p.res,
+#                            stat="identity") + coord_flip()  +
+# theme_classic(base_size = 20) + facet_grid(rows=vars(State))
+# 
+# png(paste0(Fig_dir,"Res_Type_state_sum.png"),width=16,height=9,res=1200,units='in')
+# Res_Type_state_sum
+# dev.off()
+# 
+# 
+# #Undeveloped SubTable
+# 
+# p.und<-p3[which(p3$LU_Class=="Undeveloped"),]
+# 
+# Und_Type<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_SubClass), data = p.und, position="fill",
+#                            stat="identity") + coord_flip()  +
+# theme_classic(base_size = 20)
+# 
+# png(paste0(Fig_dir,"Und_Type.png"),width=16,height=9,res=1200,units='in')
+# Und_Type
+# dev.off()
+# 
+# Und_Type_state<-ggplot() + geom_bar(aes(y = Area, x = cat, fill = LU_SubClass), data = p.und, position="fill",
+#                            stat="identity") + coord_flip()  +
+# theme_classic(base_size = 20) + facet_grid(rows=vars(State))
+# 
+# png(paste0(Fig_dir,"Und_Type_state.png"),width=16,height=9,res=1200,units='in')
+# Und_Type_state
+# dev.off()
+
+
+
+
+
+```
+
+
+##Figures and Tables 2: Property Characteristics
+
+```{r}
+dir<-"D:/Dropbox/Shared CBRA/"
+Tab_dir<-paste0(dir,"Analysis/CBRA_Impact_2016/Output/Tables/")
+Fig_dir<-paste0(dir,"Analysis/CBRA_Impact_2016/Output/Figures/")
+GIS_dir<-paste0(dir,"Analysis/CBRA_Impact_2016/Output/GIS/")
+####Beanplots
+props<-d[c("key","cat","Area_cat")]
+
+#Where parcels are split into more than one category, categorize according to the largest represented category
+props<-props%>%group_by(key)%>%summarise(Area_cat=max(Area_cat)) #identify largest area portion within a parcel
+props$select=1
+d2<-merge(d,props,by=c("key","Area_cat")) #select parcel records representing largest category
+
+
+b<-d2%>%distinct(ImportParcelID, .keep_all=TRUE)#bldg level
+
+
+
+b$CoBRA_Status<-"Non-CoBRA"
+b$CoBRA_Status[which(b$cat %in% c("SU, Not Protected","SU, Protected"))]<-"System Unit"
+b$CoBRA_Status[which(b$cat=="OPA")]<-"OPA"
+
+b$CoBRA_Status<-factor(b$CoBRA_Status,levels(factor(b$CoBRA_Status))[c(1,3,2)])
+
+b$Protection<-"Unprotected"
+b$Protection[which(b$cat %in% c("SU, Protected", "OPA", "NonCoBRA, Protected"))]<-"Protected"
+b$Protection<-factor(b$Protection,levels(factor(b$Protection))[c(2,1)])
+
+
+b<-merge(b,LU2,by="PropertyLandUseStndCode",all.x=TRUE)
+b<-b[which(!is.na(b$State)),]
+D<-b[which(b$NoOfBuildings>0 | b$Count.bldgs>0),] #subset constructed land
+library(lubridate)
+D$DateSold<-as.Date(D$RecordingDate,format="%Y-%m-%d")
+D$YearSold<-year(D$DateSold)
+
+
+
+R<-D[which(D$LUPrefix=="RR" & D$NoOfBuildings<2),]
+r <- R[R$PropertyLandUseStndCode %in% c('RR101',  # SFR
+                                       # 'RR103', # Mobile home
+                                            'RR999',  # Inferred SFR
+                                           'RR102',  # Rural Residence   (includes farm/productive land?)
+                                            'RR104',  # Townhouse
+                                            'RR105',  # Cluster Home
+                                           'RR106',  # Condominium
+                                            'RR107',  # Cooperative
+                                            'RR108',  # Row House
+                                            'RR109',  # Planned Unit Development
+                                            'RR113',  # Bungalow
+                                            'RR116',  # Patio Home
+                                            'RR119',  # Garden Home
+                                            'RR120'), # Landominium
+]
+
+#inflation-adjust sales prices
+cpi<-read.csv(paste0(Zdir,"cpi.csv"),stringsAsFactors=FALSE) #https://www.minneapolisfed.org/community/financial-and-economic-education/cpi-calculator-information/consumer-price-index-and-inflat#ion-rates-1913
+cpi$YearSold<-as.numeric(cpi[,1])
+r$YearSold[which(r$YearSold<1900)]<-NA
+r$YearSold[which(r$YearSold<1920)]<-r$YearSold[which(r$YearSold<1920)]+100
+r<-merge(r,cpi,by="YearSold",all.x=TRUE)
+r$RealSalesPrice2016<-r$SalesPriceAmount*240/r$CPI
+
+s<-distinct(r,RealSalesPrice2016,PropertyFullStreetAddress,DateSold, .keep_all=TRUE)
+
+###Full b
+#b
+#Areas
+#Land Market Value/Acre
+#Footprint Ratio
+
+b$Area_truncate<-b$Area_clip
+b$Area_truncate[which(b$Area_truncate>5)]<-5
+b$Area_truncate[which(b$Area_truncate<0.01)]<-NA
+b$Area_Parcel[which(b$Area_Parcel<0.01)]<-NA
+b$count=1
+
+# 1.	REG with %Parcel area covered by structures (Microsoft buildings)
+# 2.	REG with %Parcel area covered by structures  (subset just parcels with structures) (Microsoft buildings)
+# 3.	Y=0/1 if residential, weighted by area of parcel
+
+
+
+
+#Area
+# p1<-ggplot(data=b)+
+#   geom_density(data=subset(b,Protection == "Unprotected"), aes(x=Area_truncate,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
+#   geom_density(data=subset(b,Protection == "Protected"), aes(x=Area_truncate,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
+#   coord_flip() + 
+#   xlab("Area (acres, censored at 5 ac)") + 
+#   ylab("Smoothed, Scaled Density") + 
+#   facet_grid(~CoBRA_Status) + 
+#   xlim(0,5) + 
+#   scale_fill_brewer(palette="Greys") + 
+#   theme_bw(base_size=20) + 
+#   theme(legend.position="top") + 
+#   scale_color_brewer("") + 
+#   ggtitle("Distribution of Parcel Size by CoBRA and other Protective status") 
+# 
+# 
+# png(paste0(Fig_dir,"Parcel_Size.png"),width=16,height=9,res=1200,units='in')
+# par(mar=c(5,6,4,1)+.1)
+# beanplot(Area_Parcel ~ Protection*CoBRA_Status, data=b, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Parcel Size (Acres)-log scale", cex.main=4,cex.lab=2,cex.axis=1.8)
+# legend("bottomright", fill = c("black", "grey"), cex=1.8,
+# legend = c("Unprotected", "Protected"))
+# dev.off()
+# 
+# t<-pairwise.wilcox.test(b$Area_Parcel,b$cat,p.adjust.method="bonferroni")
+# write.csv(t$p.value,paste0(Tab_dir,"wilcox_parcelSize.csv"))
+# 
+# 
+# png(paste0(Fig_dir,"Parcel_Size_State.png"),width=9,height=16,res=1200,units='in')
+# p1 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
+# dev.off()
+# 
+
+####Land Value
+# 
+# b$LandMarketValue_Acre<-b$LandMarketValue/(b$Area_Parcel*1000)
+# #b$LandMarketValue_Acre[which(b$LandMarketValue_Acre>5000)]<-5000
+# 
+# #Land Market Value/Acre
+# 
+# 
+# p2<-ggplot(data=b)+
+#   geom_density(data=subset(b,Protection == "Unprotected"), aes(x=LandMarketValue_Acre,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
+#   
+#   geom_density(data=subset(b,Protection == "Protected"), aes(x=LandMarketValue_Acre,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
+#   coord_flip() + 
+#   xlab(" 1,000 USD/Acre), censored at 5,000") + 
+#   ylab("Smoothed, Scaled Density") + 
+#   facet_grid(~CoBRA_Status) + 
+#  # xlim(0,2000000) + 
+#   scale_fill_brewer(palette="Greys") + 
+#   theme_bw(base_size=20) + 
+#   theme(legend.position="top") + 
+#   scale_color_brewer("") + 
+#   ggtitle("Distribution of Market Value/Acre by CoBRA and other Protective status")
+# 
+# png(paste0(Fig_dir,"LandMarket_Acre_all.png"),width=16,height=9,res=1200,units='in')
+# par(mar=c(5,6,4,1)+.1)
+# beanplot(LandMarketValue_Acre ~ Protection*CoBRA_Status, data=b, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Land Market Value (USD/Acre) - log scale ", cex.main=4,cex.lab=2,cex.axis=1.8,log="y")
+# legend("bottomright", fill = c("black", "grey"), cex=1.8,
+# legend = c("Unprotected", "Protected"))
+# dev.off()
+# 
+# t<-pairwise.wilcox.test(b$LandMarketValue_Acre,b$cat,p.adjust.method="bonferroni")
+# write.csv(t$p.value,paste0(Tab_dir,"wilcox_LandMarketValue_Acre_all.csv"))
+# 
+# 
+# png(paste0(Fig_dir,"LandMarket_Acre_all_State.png"),width=9,height=16,res=1200,units='in')
+# p2 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
+# dev.off()
+
+#bldg footprintel
+
+b$Area.bldg[is.na(b$Area.bldg)]<-0
+b$PercentParcelBldg<-100*b$Area.bldg/b$Area_Parcel
+
+m1<-tidy(lm(PercentParcelBldg~cat,data=b))
+m1.f<-tidy(lm(PercentParcelBldg~cat+factor(FIPS),data=b))
+m2<-tidy(lm(PercentParcelBldg~cat,data=b[b$Area.bldg>0,]))
+m2.f<-tidy(lm(PercentParcelBldg~cat+factor(FIPS),data=b[b$Area.bldg>0,]))
+
+# 
+# 
+# p3<-ggplot(data=b)+
+#   geom_density(data=subset(b,Protection == "Unprotected"), aes(x=PercentParcelBldg,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
+#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
+#   geom_density(data=subset(b,Protection == "Protected"), aes(x=PercentParcelBldg,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
+#   coord_flip() + 
+#   xlab("Land Market Value (1,000 USD)/Acre)") + 
+#   ylab("Smoothed, Scaled Density") + 
+#   facet_grid(~CoBRA_Status) + 
+#  # xlim(0,2000000) + 
+#   scale_fill_brewer(palette="Greys") + 
+#   theme_bw(base_size=20) + 
+#   theme(legend.position="top") + 
+#   scale_color_brewer("") + 
+#   ggtitle("Distribution of % Parcel Area covered by Structures")
+# 
+# png(paste0(Fig_dir,"PercentParcelBldgCovered.png"),width=16,height=9,res=1200,units='in')
+# par(mar=c(5,6,4,1)+.1)
+#  beanplot(PercentParcelBldg ~ Protection*CoBRA_Status, data=b, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "% Parcel Area covered by Structures", cex.main=4,cex.lab=2,cex.axis=1.8, bw="nrd0")
+# legend("bottomright", fill = c("black", "grey"), cex=1.8,
+# legend = c("Unprotected", "Protected"))
+# dev.off()
+# 
+# t<-pairwise.wilcox.test(b$PercentParcelBldg,b$cat,p.adjust.method="bonferroni")
+# write.csv(t$p.value,paste0(Tab_dir,"wilcox_PercentParcelBldg_all.csv"))
+# 
+# png(paste0(Fig_dir,"PercentParcelBldgCovered_State.png"),width=9,height=16,res=1200,units='in')
+# p3+ facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
+# dev.off()
+
+b$NO_NFIP<-0
+b$NO_NFIP[b$CoBRA_Status %in% c("System Unit","OPA")]<-1
+
+b$PROT<-0
+b$PROT[b$Protection=="Protected" | b$CoBRA_Status=="OPA"]<-1
+
+b$NO_FED_SUB<-0
+b$NO_FED_SUB[b$CoBRA_Status %in% c("System Unit")]<-1
+
+#m1<-lm(PercentParcelBldg~cat,data=b)
+
+
+#YearBuilt
+b$YearBuiltCensored<-b$YearBuilt
+b$YearBuiltCensored[which(b$YearBuilt<1950)]<-1950
+
+# p4<-ggplot(data=b)+
+#   geom_density(data=subset(b,Protection == "Unprotected"), aes(x=YearBuiltCensored,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
+#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
+#   geom_density(data=subset(b,Protection == "Protected"), aes(x=YearBuiltCensored,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
+#   coord_flip() + 
+#   xlab("Year Built (Censored 1950)") + 
+#   ylab("Smoothed, Scaled Density") + 
+#   facet_grid(~CoBRA_Status) + 
+#  # xlim(0,2000000) + 
+#   scale_fill_brewer(palette="Greys") + 
+#   theme_bw(base_size=20) + 
+#   theme(legend.position="top") + 
+#   scale_color_brewer("") + 
+#   ggtitle("Distribution of Year Built") + 
+#   scale_x_continuous(breaks=seq(1950,2020,10)) +
+#   geom_vline(xintercept=1982, size=2) +
+#   annotate(geom="text",x=1984, y=0, angle=0, label="1983 - Coastal Barrier Resources Act") +
+#   geom_vline(xintercept=1990, size=2) +
+#   annotate(geom="text",x=1992, y=0, angle=0, label="1990 - Coastal Barrier Improvement Act")
+# 
+# png(paste0(Fig_dir,"YearBuilt.png"),width=16,height=9,res=1200,units='in')
+# par(mar=c(5,6,4,1)+.1)
+#  beanplot(YearBuilt ~ Protection*CoBRA_Status, data=b, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Year Built (censored 1950)", cex.main=4,cex.lab=2,cex.axis=1.8, bw="nrd0", ylim=c(1950,2020))
+# legend("bottomright", fill = c("black", "grey"), cex=1.8,
+# legend = c("Unprotected", "Protected"))
+# abline(h=1982, col="red")
+# text(3.5,1983.5, "1982", pos=2)
+# text(3.5,1991.5, "1990",pos=2)
+# abline(h=1990, col= "red")
+# dev.off()
+
+# t<-pairwise.wilcox.test(b$YearBuilt,b$cat,p.adjust.method="bonferroni")
+# write.csv(t$p.value,paste0(Tab_dir,"wilcox_YearBuilt_all.csv"))
+# 
+# 
+# png(paste0(Fig_dir,"YearBuilt_State.png"),width=9,height=16,res=1200,units='in')
+# p4 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
+# dev.off()
+# 
+
+###SFR
+
+#Footprint Ratio: Area bldg/Area
+r$FPR<-100*r$Area.bldg/r$Area_Parcel
+r$FPR[which(r$FPR==0)]<-100*r$sqfeet[which(r$FPR==0)]/(43560*r$Area_Parcel[which(r$FPR==0)])
+#r$FPR[which(r$FPR>100)]<-100
+r$sqm<-r$sqfeet*0.092903
+
+m3<-tidy(lm(log(sqm)~cat,data=r))
+m3.f<-tidy(lm(log(sqm)~cat+factor(FIPS),data=r))
+
+m4<-tidy(lm(FPR~cat,data=r))
+m4.f<-tidy(lm(FPR~cat+factor(FIPS),data=r))
+
+# p5<-ggplot(data=r)+
+#   geom_density(data=subset(r,Protection == "Unprotected"), aes(x=FPR,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
+#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
+#   geom_density(data=subset(r,Protection == "Protected"), aes(x=FPR,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
+#   coord_flip() + 
+#   xlab("Footprint Building/Parcel Area (%)") + 
+#   ylab("Smoothed, Scaled Density") + 
+#   facet_grid(~CoBRA_Status) + 
+#  # xlim(0,2000000) + 
+#   scale_fill_brewer(palette="Greys") + 
+#   theme_bw(base_size=20) + 
+#   theme(legend.position="top") + 
+#   scale_color_brewer("") + 
+#   ggtitle("% Residential Parcel Area covered by Building Footprint")
+# 
+# png(paste0(Fig_dir,"PercentParcelBldgCovered_Res.png"),width=16,height=9,res=1200,units='in')
+# par(mar=c(5,6,4,1)+.1)
+#  beanplot(FPR ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = " % Residential Parcel Area covered by Structures", cex.main=4,cex.lab=2,cex.axis=1.8, bw="nrd0",log="")
+# legend("topright", fill = c("black", "grey"), cex=1.8,
+# legend = c("Unprotected", "Protected"))
+# dev.off()
+# 
+# t<-pairwise.wilcox.test(r$FPR,r$cat,p.adjust.method="bonferroni")
+# write.csv(t$p.value,paste0(Tab_dir,"wilcox_FPR_res.csv"))
+# 
+# 
+# png(paste0(Fig_dir,"PercentParcelBldgCovered_ResState.png"),width=9,height=16,res=1200,units='in')
+# p5+ facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
+# dev.off()
+
+
+#YearBuilt, res
+
+r$YearBuiltCensored<-r$YearBuilt
+r$YearBuiltCensored[which(r$YearBuilt<1950)]<-1950
+
+# p6<-ggplot(data=s)+
+#   geom_density(data=subset(s,Protection == "Unprotected"), aes(x=YearBuilt,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
+#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
+#   geom_density(data=subset(s,Protection == "Protected"), aes(x=YearBuilt,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
+#   coord_flip() + 
+#   xlab("Residence Age (Years, censored at 100)") + 
+#   ylab("Smoothed, Scaled Density") + 
+#   facet_grid(~CoBRA_Status) + 
+#  # xlim(0,2000000) + 
+#   scale_fill_brewer(palette="Greys") + 
+#   theme_bw(base_size=20) + 
+#   theme(legend.position="top") + 
+#   scale_color_brewer("") + 
+#   ggtitle("Distribution of Residential Building Age")
+# 
+# png(paste0(Fig_dir,"Resi_Age.png"),width=16,height=9,res=1200,units='in')
+# par(mar=c(5,6,4,1)+.1)
+# beanplot(YearBuilt ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Year Built (censored 1950)", cex.main=4,cex.lab=2,cex.axis=1.8,ylim=c(1950,2020))
+# legend("bottomright", fill = c("black", "grey"), cex=1.8,
+# legend = c("Unprotected", "Protected"))
+# abline(h=1982, col="red")
+# text(3.5,1983.5, "1982", pos=2)
+# text(3.5,1991.5, "1990",pos=2)
+# abline(h=1990, col= "red")
+# 
+# dev.off()
+# 
+# t<-pairwise.wilcox.test(r$YearBuilt,r$cat,p.adjust.method="bonferroni")
+# write.csv(t$p.value,paste0(Tab_dir,"wilcox_YearBuilt_res.csv"))
+# 
+# 
+# 
+# png(paste0(Fig_dir,"Resi_Age_State.png"),width=9,height=16,res=1200,units='in')
+# p6 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
+# dev.off()
+
+r$sqft<-r$sqfeet
+#r$sqft[which(r$sqft>10000)]<-10000
+r$sqft[which(r$sqft<500)]<-NA
+#sqfeet
+# p7<-ggplot(data=r)+
+#   geom_density(data=subset(r,Protection == "Unprotected"), aes(x=sqft,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
+#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
+#   geom_density(data=subset(r,Protection == "Protected"), aes(x=sqft,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
+#   coord_flip() + 
+#   xlab("Residence Square Footage (censored at 10,000)") + 
+#   ylab("Smoothed, Scaled Density") + 
+#   facet_grid(~CoBRA_Status) + 
+#  # xlim(0,2000000) + 
+#   scale_fill_brewer(palette="Greys") + 
+#   theme_bw(base_size=20) + 
+#   theme(legend.position="top") + 
+#   scale_color_brewer("") + 
+#   ggtitle("Distribution of Residential Square Footage")
+# 
+# png(paste0(Fig_dir,"Resi_sqft.png"),width=16,height=9,res=1200,units='in')
+# par(mar=c(5,6,4,1)+.1)
+#  beanplot(sqft ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Residence Square Footage (censored at 10,000)", cex.main=4,cex.lab=2,cex.axis=1.8, ylim=c(0,10000), bw="nrd0", log="")
+# legend("topright", fill = c("black", "grey"), cex=1.8,
+# legend = c("Unprotected", "Protected"))
+# dev.off()
+# 
+# t<-pairwise.wilcox.test(r$sqft,r$cat,p.adjust.method="bonferroni")
+# write.csv(t$p.value,paste0(Tab_dir,"wilcox_sqft_res.csv"))
+# 
+# 
+# png(paste0(Fig_dir,"Resi_sqft_State.png"),width=9,height=16,res=1200,units='in')
+# p7 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
+# dev.off()
+
+
+
+#FAR=sqfeet/bldg footprint
+
+#Bedrooms
+r$bed<-r$TotalBedrooms
+r$bed[which(r$TotalBedrooms==0)]<-NA
+#r$bed[which(r$TotalBedrooms>=10)]<-10
+
+
+# p8<-ggplot(data=r)+
+#   geom_bar(data=subset(r,Protection == "Unprotected"), aes(x=bed,y=..prop..,fill=factor(Protection)),colour="black") +
+#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
+#   geom_bar(data=subset(r,Protection == "Protected"), aes(x=bed,y=-..prop..,fill=factor(Protection)),colour="black") +
+#   coord_flip() + 
+#   xlab("# Bedrooms (censored at 10)") + 
+#   ylab("Smoothed, Scaled Density") + 
+#   facet_grid(~CoBRA_Status) + 
+#    xlim(0,10) + 
+#   scale_fill_brewer(palette="Greys") + 
+#   theme_bw(base_size=20) + 
+#   theme(legend.position="top") + 
+#   ggtitle("Distribution of # Bedrooms") + scale_x_continuous(breaks=seq(1,10,1))
+# 
+# png(paste0(Fig_dir,"bedrooms.png"),width=16,height=9,res=1200,units='in')
+# par(mar=c(5,6,4,1)+.1)
+#  beanplot(bed ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Bedrooms (censored at 10)", cex.main=4,cex.lab=2,cex.axis=1.8, bw="nrd0", log="",ylim=c(0,10))
+# legend("bottomright", fill = c("black", "grey"), cex=1.8,
+# legend = c("Unprotected", "Protected"))
+# dev.off()
+# 
+# t<-pairwise.wilcox.test(r$bed,r$cat,p.adjust.method="bonferroni")
+# write.csv(t$p.value,paste0(Tab_dir,"wilcox_bedrooms_res.csv"))
+# 
+# 
+# png(paste0(Fig_dir,"bedrooms_State.png"),width=9,height=16,res=1200,units='in')
+# p8 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
+# dev.off()
+# 
+# 
+# #bathrooms
+# r$bath<-base::rowSums(cbind(r$FullBath,0.5*r$HalfBath,0.75*r$ThreeQuarterBath,0.25*r$QuarterBath),na.rm=T)
+# r$bath[which(r$bath==0)]<-NA
+# #r$bath[which(r$bath>6)]<-6
+# 
+# 
+# p9<-ggplot(data=r)+
+#   geom_bar(data=subset(r,Protection == "Unprotected"), aes(x=bath,y=..prop..,fill=factor(Protection)),colour="black") +
+#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
+#   geom_bar(data=subset(r,Protection == "Protected"), aes(x=bath,y=-..prop..,fill=factor(Protection)),colour="black") +
+#   coord_flip() + 
+#   xlab("# Bathrooms (censored at 6)") + 
+#   ylab("Smoothed, Scaled Density") + 
+#   facet_grid(~CoBRA_Status) + 
+#    xlim(0,10) + 
+#   scale_fill_brewer(palette="Greys") + 
+#   theme_bw(base_size=20) + 
+#   theme(legend.position="top") + 
+#   ggtitle("Distribution of # Bathrooms") + scale_x_continuous(breaks=seq(0,10,0.5))
+# 
+# png(paste0(Fig_dir,"bathrooms.png"),width=16,height=9,res=1200,units='in')
+# par(mar=c(5,6,4,1)+.1)
+#  beanplot(bath ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Bathrooms (censored at 6)", cex.main=4,cex.lab=2,cex.axis=1.8, bw="nrd0", log="", ylim=c(0,6))
+# legend("bottomright", fill = c("black", "grey"), cex=1.8,
+# legend = c("Unprotected", "Protected"))
+# dev.off()
+# 
+# t<-pairwise.wilcox.test(r$bath,r$cat,p.adjust.method="bonferroni")
+# write.csv(t$p.value,paste0(Tab_dir,"wilcox_bathroom_res.csv"))
+# 
+# 
+# png(paste0(Fig_dir,"bathrooms_State.png"),width=9,height=16,res=1200,units='in')
+# p9 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
+# dev.off()
+
+
+#Improvement Market Value/sqft
+
+r$Val_sqft<-r$TotalMarketValue/r$sqft
+#r$Val_sqm<-r$
+
+#r$Val_sqft<-
+#r$Val_sqft[which(r$sqfeet<500)]<-NA
+#r$Val_sqft[which(r$Val_sqft>500)]<-500
+
+# p10<-ggplot(data=r)+
+#   geom_density(data=subset(r,Protection == "Unprotected"), aes(x=Val_sqft,y= ..scaled..,fill=factor(Protection)),trim=TRUE) +
+#  # geom_density(data=b, aes(x=PercentParcelBldg,y=..density..,fill=factor(cat)),trim=FALSE) +
+#   geom_density(data=subset(r,Protection == "Protected"), aes(x=Val_sqft,y=-..scaled..,fill=factor(Protection)),trim=TRUE) +
+#   coord_flip() + 
+#   xlab("Value (USD/sqft, censored at 500 USD/sqft)") + 
+#   ylab("Smoothed, Scaled Density") + 
+#   facet_grid(~CoBRA_Status) + 
+#  # xlim(0,2000000) + 
+#   scale_fill_brewer(palette="Greys") + 
+#   theme_bw(base_size=20) + 
+#   theme(legend.position="top") + 
+#   scale_color_brewer("") + 
+#   ggtitle("Distribution of Assessed Improvement Market Value (USD/sqft)")
+# 
+# png(paste0(Fig_dir,"Resi_val_sqft2.png"),width=16,height=9,res=1200,units='in')
+# par(mar=c(5,6,4,1)+.1)
+#  beanplot(Val_sqft ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Improvement Market Value/ sqft", cex.main=4,cex.lab=2,cex.axis=1.8,ylim=c(10,1000))
+# legend("bottomright", fill = c("black", "grey"), cex=1.8,
+# legend = c("Unprotected", "Protected"))
+# dev.off()
+# 
+# t<-pairwise.wilcox.test(r$Val_sqft,r$cat,p.adjust.method="bonferroni")
+# write.csv(t$p.value,paste0(Tab_dir,"wilcox_valsqft_res.csv"))
+# 
+# 
+# png(paste0(Fig_dir,"Resi_val_sqft_State.png"),width=9,height=16,res=1200,units='in')
+# p10 + facet_grid(rows=vars(State), cols=vars(CoBRA_Status))
+# dev.off()
+
+
+
+#Land Market Value/acre
+#Lan
+r$Land_Val_Acre<-r$LandMarketValue/r$Area_Parcel
+png(paste0(Fig_dir,"LandMarket_Acre_res.png"),width=16,height=9,res=1200,units='in')
+par(mar=c(5,6,4,1)+.1)
+beanplot(Land_Val_Acre ~ Protection*CoBRA_Status, data=r, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Land Market Value (USD/Acre) - log scale ", cex.main=4,cex.lab=2,cex.axis=1.8)
+legend("bottomright", fill = c("black", "grey"), cex=1.8,
+legend = c("Unprotected", "Protected"))
+dev.off()
+
+t<-pairwise.wilcox.test(r$Land_Val_Acre,r$cat,p.adjust.method="bonferroni")
+write.csv(t$p.value,paste0(Tab_dir,"wilcox_landvalacre_res.csv"))
+
+
+
+##Sale Price/ sqft
+# 
+# png(paste0(Fig_dir,"SalePrice_res.png"),width=16,height=9,res=1200,units='in')
+# par(mar=c(5,6,4,1)+.1)
+# beanplot(RealSalesPrice2016 ~ Protection*CoBRA_Status, data=s, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Sale Price (2016 USD) - log scale ", cex.main=4,cex.lab=2,cex.axis=1.8,ylim=c(10000,10000000))
+# legend("topright", fill = c("black", "grey"), cex=1.8,
+# legend = c("Unprotected", "Protected"))
+# dev.off()
+
+
+s$Sales_sqft<-s$RealSalesPrice2016/s$sqfeet
+s$Sales_sqft[which(s$sqfeet<500)]<-NA
+s$Sales_sqft[s$RealSalesPrice2016<5000]<-NA
+s$Sale.sqft<-s$SalesPriceAmount/s$sqfeet
+
+
+#s<-s[s$YearSold>=2010,]
+#s$sqm<-s$sqfeet*0.09
+s$Sales_sqm<-s$Sales_sqft/0.092903
+
+m5<-tidy(lm(log(Sales_sqm)~cat,data=s))
+m5.trim<-tidy(lm(log(Sales_sqm)~cat,data=s[(s$SalesPriceAmount>10000 & s$SalesPriceAmount<2800000),]))
+m5.f<-tidy(lm(log(Sales_sqm)~cat+factor(FIPS),data=s))
+m5.f.trim<-tidy(lm(log(Sales_sqm)~cat+factor(FIPS),data=s[(s$SalesPriceAmount>10000 & s$SalesPriceAmount<2800000),]))
+m5.f.y<-tidy(lm(log(Sales_sqm)~cat+factor(FIPS)+YearSold,data=s))
+m5.f.y.trim<-tidy(lm(log(Sales_sqm)~cat+factor(FIPS)+YearSold,data=s[(s$SalesPriceAmount>10000 & s$SalesPriceAmount<2800000),]))
+
+
+png(paste0(Fig_dir,"SalePrice_sqft_res.png"),width=16,height=9,res=1200,units='in')
+par(mar=c(5,6,4,1)+.1)
+beanplot(Sales_sqft ~ Protection*CoBRA_Status, data=s, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Sale Price (2016 USD) - log scale ", cex.main=4,cex.lab=2,cex.axis=1.8,ylim=c(10,10000))
+legend("topright", fill = c("black", "grey"), cex=1.8,
+legend = c("Unprotected", "Protected"))
+dev.off()
+
+t<-pairwise.wilcox.test(s$Sales_sqft,s$cat,p.adjust.method="bonferroni")
+write.csv(t$p.value,paste0(Tab_dir,"wilcox_Sales_sqft_res.csv"))
+
+
+
+###Vacant values
+v<-b[which(b$Count.bldgs==0 & (is.na(b$NoOfBuildings)|b$NoOfBuildings==0)),]
+#v<-merge(v,LU2,by="PropertyLandUseStndCode")
+v<-v[v$LU_SubClass %in% c('Agriculture',
+                      'Other Vacant',"Vacant but Zoned","Public/Park/Recreation/Wilderness")
+,]
+r <- R[R$PropertyLandUseStndCode %in% c('RR101',  # SFR
+                                            'RR999',  # Inferred SFR
+                                           'RR102',  # Rural Residence   (includes farm/productive land?)
+                                            'RR104',  # Townhouse
+                                            'RR105',  # Cluster Home
+                                           'RR106',  # Condominium
+                                            'RR107',  # Cooperative
+                                            'RR108',  # Row House
+                                            'RR109',  # Planned Unit Development
+                                            'RR113',  # Bungalow
+                                            'RR116',  # Patio Home
+                                            'RR119',  # Garden Home
+                                            'RR120'), # Landominium
+]
+#v<-v[which((v$Count.bldgs/v$Area_Parcel)<0.2),]
+v$LandValue_Acre<-v$TotalMarketValue/v$Area_Parcel
+v$DateSold<-as.Date(v$RecordingDate,format="%Y-%m-%d")
+v$YearSold<-year(v$DateSold)
+
+v$YearSold[which(v$YearSold<1900)]<-NA
+v$YearSold[which(v$YearSold<1920)]<-v$YearSold[which(v$YearSold<1920)]+100
+v<-merge(v,cpi,by="YearSold",all.x=TRUE)
+v$RealSalesPrice2016<-v$SalesPriceAmount*240/v$CPI
+v$SalesPriceAcre<-v$RealSalesPrice2016/v$Area_Parcel
+
+
+
+png(paste0(Fig_dir,"MarketValue_acre_vacant.png"),width=16,height=9,res=1200,units='in')
+par(mar=c(5,6,4,1)+.1)
+beanplot(LandValue_Acre ~ Protection*CoBRA_Status, data=v, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Market Values (USD/acre)-log scale", cex.main=4,cex.lab=2,cex.axis=1.8, ylim=c(1,10000000))
+legend("bottomright", fill = c("black", "grey"), cex=1.8,
+legend = c("Unprotected", "Protected"))
+dev.off()
+
+t<-pairwise.wilcox.test(v$LandValue_Acre,v$cat,p.adjust.method="bonferroni")
+write.csv(t$p.value,paste0(Tab_dir,"wilcox_LVAcre_Vacant.csv"))
+
+
+
+png(paste0(Fig_dir,"SalesPrice_acre_vacant.png"),width=16,height=9,res=1200,units='in')
+par(mar=c(5,6,4,1)+.1)
+beanplot(SalesPriceAcre ~ Protection*CoBRA_Status, data=v, ll = 0.04, side = "both", xlab="CoBRA Status", col = list("black", c("grey", "white")), what=c(1,1,1,0), ylab = "Sales Price (2016 USD/acre)-log scale", cex.main=4,cex.lab=2,cex.axis=1.8, ylim=c(10,1000000000))
+legend("bottomright", fill = c("black", "grey"), cex=1.8,
+legend = c("Unprotected", "Protected"))
+dev.off()
+
+t<-pairwise.wilcox.test(v$SalesPriceAcre,v$cat,p.adjust.method="bonferroni")
+write.csv(t$p.value,paste0(Tab_dir,"wilcox_SalesPrivAcre_Vacant.csv"))
+
+library(lfe)
+# m1<-lm(PercentParcelBldg~cat,data=b)
+# m1.f<-lm(PercentParcelBldg~cat+factor(FIPS),data=b)
+# m2<-lm(PercentParcelBldg~cat,data=b[b$Area.bldg>0,])
+# m2.f<-lm(PercentParcelBldg~cat+factor(FIPS),data=b[b$Area.bldg>0,])
+# m3<-lm(log(sqm)~cat,data=r)
+# m3.f<-lm(log(sqm)~cat+factor(FIPS),data=r)
+# m4<-lm(FPR~cat,data=r)
+# m4.f<-lm(FPR~cat+factor(FIPS),data=r)
+# m5<-lm(log(Sales_sqm)~cat,data=s)
+# m5.f<-lm(log(Sales_sqm)~cat+factor(FIPS),data=s)
+
+b$st<-as.factor(b$State)
+b$county<-as.factor(b$FIPS)
+r$st<-as.factor(r$State)
+r$county<-as.factor(r$FIPS)
+s$st<-as.factor(s$State)
+s$county<-as.factor(s$FIPS)
+  
+m1<-felm(PercentParcelBldg~cat|0|0|0,data=b)
+m1.cl_s<-felm(PercentParcelBldg~cat|0|0|st,data=b)
+m1.cl_c<-felm(PercentParcelBldg~cat|0|0|county,data=b)
+m1.f<-felm(PercentParcelBldg~cat|county|0|0,data=b)
+m1.f.cl_s<-felm(PercentParcelBldg~cat|county|0|st,data=b)
+m1.f.cl_c<-felm(PercentParcelBldg~cat|county|0|county,data=b)
+
+
+
+m2<-felm(PercentParcelBldg~cat|0|0|0,data=b[b$Area.bldg>0,])
+m2.cl_s<-felm(PercentParcelBldg~cat|0|0|st,data=b[b$Area.bldg>0,])
+m2.cl_c<-felm(PercentParcelBldg~cat|0|0|county,data=b[b$Area.bldg>0,])
+m2.f<-felm(PercentParcelBldg~cat|county|0|0,data=b[b$Area.bldg>0,])
+m2.f.cl_s<-felm(PercentParcelBldg~cat|county|0|st,data=b[b$Area.bldg>0,])
+m2.f.cl_c<-felm(PercentParcelBldg~cat|county|0|county,data=b[b$Area.bldg>0,])
+
+
+m3<-felm(log(sqm)~cat|0|0|0,data=r)
+m3.cl_s<-felm(log(sqm)~cat|0|0|st,data=r)
+m3.cl_c<-felm(log(sqm)~cat|0|0|county,data=r)
+m3.f<-felm(log(sqm)~cat|county|0|0,data=r)
+m3.f.cl_s<-felm(log(sqm)~cat|county|0|st,data=r)
+m3.f.cl_c<-felm(log(sqm)~cat|county|0|county,data=r)
+
+m4<-felm(FPR~cat|0|0|0,data=r)
+m4.cl_s<-felm(FPR~cat|0|0|st,data=r)
+m4.cl_c<-felm(FPR~cat|0|0|county,data=r)
+m4.f<-felm(FPR~cat|county|0|0,data=r)
+m4.f.cl_s<-felm(FPR~cat|county|0|st,data=r)
+m4.f.cl_c<-felm(FPR~cat|county|0|county,data=r)
+
+m5<-felm(log(Sales_sqm)~cat|0|0|0,data=s)
+m5.cl_s<-felm(log(Sales_sqm)~cat|0|0|st,data=s)
+m5.cl_c<-felm(log(Sales_sqm)~cat|0|0|county,data=s)
+m5.f<-felm(log(Sales_sqm)~cat|county|0|0,data=s)
+m5.f.cl_s<-felm(log(Sales_sqm)~cat|county|0|st,data=s)
+m5.f.cl_c<-felm(log(Sales_sqm)~cat|county|0|county,data=s)
+
+
+#m1
+stargazer(m1,m1.cl_s,m1.cl_c,m1.f,m1.f.cl_s,m1.f.cl_c,type="html",out=paste0(Tab_dir,"Regressions_m1.html"))
+#m2
+stargazer(m2,m2.cl_s,m2.cl_c,m2.f,m2.f.cl_s,m2.f.cl_c,type="html",out=paste0(Tab_dir,"Regressions_m2.html"))
+#m3
+stargazer(m3,m3.cl_s,m3.cl_c,m3.f,m3.f.cl_s,m3.f.cl_c,type="html",out=paste0(Tab_dir,"Regressions_m3_2.html"))
+#m4
+stargazer(m4,m4.cl_s,m4.cl_c,m4.f,m4.f.cl_s,m4.f.cl_c,type="html",out=paste0(Tab_dir,"Regressions_m4.html"))
+#m5
+stargazer(m5,m5.cl_s,m5.cl_c,m5.f,m5.f.cl_s,m5.f.cl_c,type="html",out=paste0(Tab_dir,"Regressions_m5.html"))
+
+rm(list=setdiff(ls(), c("m1","m1.f","m2","m2.f","m3","m3.f","m4","m4.f","m5","m5.f","m5.trim","m5.f.trim","m5.f.y","m5.f.y.trim")))
+m1<-tidy(m1)
+m1.f<-tidy(m1.f)
+m2<-tidy(m2)
+m2.f<-tidy(m2.f)
+m3<-tidy(m3)
+m3.f<-tidy(m3.f)
+m4<-tidy(m4)
+m4.f<-tidy(m4.f)
+m5<-tidy(m5)
+m5.f<-tidy(m5.f)
+m5.f.y<-tidy(m5.f.y)
+m5.trim<-tidy(m5.trim)
+m5.f.trim<-tidy(m5.f.trim)
+m5.f.y.trim<-tidy(m5.f.y.trim)
+
+m1.f<-m1.f[c(1:5),]
+m2.f<-m2.f[c(1:5),]
+m3.f<-m3.f[c(1:5),]
+m4.f<-m4.f[c(1:5),]
+m5.f<-m5.f[c(1:5),]
+m5.f.y<-m5.f.y[c(1:5),]
+m5.f.trim<-m5.f.trim[c(1:5),]
+m5.f.y.trim<-m5.f.y.trim[c(1:5),]
+
+
+
+
+
+
+m1$model="No Fixed Effects"
+m1$DV="%Parcel Area Covered by Building Footprint (All Parcels)"
+m1.f$model="County Fixed Effects"
+m1.f$DV="%Parcel Area Covered by Building Footprint (All Parcels)"
+
+m2$model="No Fixed Effects"
+m2$DV="% Parcel Area Covered by Building Footprint (Developed Parcels)"
+m2.f$model="County Fixed Effects"
+m2.f$DV="% Parcel Area Covered by Building Footprint (Developed Parcels)"
+
+m3$model="No Fixed Effects"
+m3$DV="log(Residential m^2)"
+m3.f$model="County Fixed Effects"
+m3.f$DV="log(Residential m^2)"
+
+
+
+m4$model="No Fixed Effects"
+m4$DV="Residential Area/Parcel Area"
+m4.f$model="County Fixed Effects"
+m4.f$DV="Residential Area/Parcel Area"
+
+
+m5$model="No Fixed Effects"
+m5$DV="log(Sales Price (2016 USD/m^2))"
+m5.f$model="County Fixed Effects"
+m5.f$DV="log(Sales Price (2016 USD/m^2))"
+
+
+
+
+# 
+# m5.trim$model="No Fixed Effects"
+# m5.f.trim$model="County Fixed Effects"
+# 
+# m5.f.y$model="Regular with years"
+# m5.f.y.trim$model="County Fixed Effects with Years"
+
+
+
+p1<-dwplot(rbind(m1,m1.f))+ # plot line at zero _behind_ coefs
+    theme_bw() + xlab("Coefficient Estimate") + ylab("") +
+    ggtitle("% Parcel Area Covered by Building Footprint")
+p2<-dwplot(rbind(m2,m2.f))+ # plot line at zero _behind_ coefs
+    theme_bw() + xlab("Coefficient Estimate") + ylab("") +
+    ggtitle("% Parcel Area Bldg-with Bldgl")
+p3<-dwplot(rbind(m3,m3.f))+ # plot line at zero _behind_ coefs
+    theme_bw() + xlab("Coefficient Estimate") + ylab("") +
+    ggtitle("log(residential area (m^2))")
+p4<-dwplot(rbind(m4,m4.f)) + # plot line at zero _behind_ coefs
+    theme_bw() + xlab("Coefficient Estimate") + ylab("") +
+    ggtitle("residential area/parcel area")
+p5<-dwplot(rbind(m5,m5.f,m5.f.y)) + # plot line at zero _behind_ coefs
+    theme_bw() + xlab("Coefficient Estimate") + ylab("") +
+    ggtitle("Sales Price/m^2")
+p5.trim<-dwplot(rbind(m5.trim,m5.f.trim,m5.f.y.trim)) + # plot line at zero _behind_ coefs
+    theme_bw() + xlab("Coefficient Estimate") + ylab("") +
+    ggtitle("Trimmed Sales Price/sqft")
+
+models<-rbind(m1.f,m1,m2.f,m2,m3.f,m3,m4.f,m4,m5.f,m5)
+models$term[models$term=="catNonCoBRA, Protected"]<-"Non-CoBRA, Protected"
+models$term[models$term=="catOPA"]<-"OPA"
+models$term[models$term=="catSU, Not Protected"]<-"CoBRA, Unprotected"
+models$term[models$term=="catSU, Protected"]<-"CoBRA, Protected"
+
+models$model <- factor(models$model, levels = rev(levels(as.factor(models$model))))
+
+p.reg<-dwplot(models)
+
+p.reg<-p.reg+geom_vline(xintercept=0)+facet_grid(cols=vars(DV),scales="free",labeller = labeller(DV = label_wrap_gen(28)))+theme_bw() + scale_color_grey()
+
+tiff(paste0(Fig_dir,"Regressions2.tiff"),width=7.5,height=3,res=600,units='in')
+p.reg+theme(legend.position="bottom") +
+    theme(text = element_text(size=8))
+dev.off()
+
+
+
+```
+
