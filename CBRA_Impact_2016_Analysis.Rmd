@@ -9,10 +9,6 @@ output: html_document
 rm(list=ls())
 #load("D:/Dropbox/Shared CBRA/Analysis/CBRA_Impact_2016/data.RData")
 knitr::opts_chunk$set(echo = TRUE)
-
-
-
-
 ```
 
 # Introduction
@@ -20,7 +16,6 @@ knitr::opts_chunk$set(echo = TRUE)
 This R Markdown file documents the code for data cleaning and analysis for the paper "Does Removing Federal Subsidies Discourage Development? An Evaluation of the Impact of the U.S. Coastal Barrier Resources Act". First, set our data directory.
 
 ```{r Introduction}
-#library(plyr)
 library(tidyverse)
 library(sp)
 library(rgdal)
@@ -41,6 +36,7 @@ library(dotwhisker)
 library(stargazer)
 library(broom)
 library(lfe)
+library(ggrepel)
 dir<-"D:/Dropbox/Shared CBRA/"
 Tab_dir<-paste0(dir,"Analysis/CBRA_Impact_2016/Output/Tables/")
 Fig_dir<-paste0(dir,"Analysis/CBRA_Impact_2016/Output/Figures/")
@@ -836,142 +832,11 @@ x<-c("NA", rev(levels(plot_data$cluster)))
 names(myColors) <- x
 colScale <- scale_colour_manual(name = "cluster",values = myColors)
 
-  
-p1<-ggplot(plot_data[plot_data$State.x==st_list[1],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
-  geom_line(aes(group = County.x, color=cluster),size=3) +
-  geom_point(aes(color=cluster), size=7, shape=124) +
-  theme_classic() +
-  scale_colour_manual(name = "cluster",values = myColors) +
-  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
-  ylab("Counties (ordered by Density in Non-System area)") + 
-  theme(axis.title.x = element_text(hjust=0.0)) +
-  theme(legend.title = element_blank()) +
-   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
-    #xlim(-4.5,4.5)+
-  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("TX") + theme(plot.title = element_text(hjust = 0.5))  + colScale
-
-p2<-ggplot(plot_data[plot_data$State.x==st_list[2],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
-  geom_line(aes(group = County.x, color=cluster),size=3) +
-  geom_point(aes(color=cluster), size=7, shape=124) +
-  theme_classic() +
-  scale_colour_manual(name = "cluster",values = myColors) +
-  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
-  ylab("Counties (ordered by Density in Non-System area)") + 
-  theme(axis.title.x = element_text(hjust=0.0)) +
-  theme(legend.title = element_blank()) +
-   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
-    #xlim(-4.5,4.5)+
-  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("LA") + theme(plot.title = element_text(hjust = 0.5))  + colScale
-
-p3<-ggplot(plot_data[plot_data$State.x==st_list[3],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
-  geom_line(aes(group = County.x, color=cluster),size=3) +
-  geom_point(aes(color=cluster), size=7, shape=124) +
-  theme_classic() +
-  scale_colour_manual(name = "cluster",values = myColors) +
-  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
-  ylab("Counties (ordered by Density in Non-System area)") + 
-  theme(axis.title.x = element_text(hjust=0.0)) +
-  theme(legend.title = element_blank()) +
-   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
-    #xlim(-4.5,4.5)+
-  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("MS") + theme(plot.title = element_text(hjust = 0.5))  + colScale
-
-p4<-ggplot(plot_data[plot_data$State.x==st_list[4],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
-  geom_line(aes(group = County.x, color=cluster),size=3) +
-  geom_point(aes(color=cluster), size=7, shape=124) +
-  theme_classic() +
-  scale_colour_manual(name = "cluster",values = myColors) +
-  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
-  ylab("Counties (ordered by Density in Non-System area)") + 
-  theme(axis.title.x = element_text(hjust=0.0)) +
-  theme(legend.title = element_blank()) +
-   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
-    #xlim(-4.5,4.5)+
-  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("AL") + theme(plot.title = element_text(hjust = 0.5))  + colScale
-
-
-p5<-ggplot(plot_data[plot_data$State.x==st_list[5],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
-  geom_line(aes(group = County.x, color=cluster),size=3) +
-  geom_point(aes(color = cluster),size=7, shape=124) +
-  theme_classic() +
-  scale_color_grey() + 
-  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
-  ylab("Counties (ordered by Density in Non-System area)") + 
-  theme(axis.title.x = element_text(hjust=0.0)) +
-  theme(legend.title = element_blank()) +
-   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
-    #xlim(-4.5,4.5)+
-  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("FL") + theme(plot.title = element_text(hjust = 0.5))  + colScale
-
-p6<-ggplot(plot_data[plot_data$State.x==st_list[6],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
-  geom_line(aes(group = County.x, color=cluster),size=3) +
-  geom_point(aes(color = cluster),size=7, shape=124) +
-  theme_classic() +
-  scale_color_grey() + 
-  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
-  ylab("Counties (ordered by Density in Non-System area)") + 
-  theme(axis.title.x = element_text(hjust=0.0)) +
-  theme(legend.title = element_blank()) +
-   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
-    #xlim(-4.5,4.5)+
-  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("GA") + theme(plot.title = element_text(hjust = 0.5))  + colScale
-
-p7<-ggplot(plot_data[plot_data$State.x==st_list[7],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
-  geom_line(aes(group = County.x, color=cluster),size=3) +
-  geom_point(aes(color = cluster),size=7, shape=124) +
-  theme_classic() +
-  scale_color_grey() + 
-  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
-  ylab("Counties (ordered by Density in Non-System area)") + 
-  theme(axis.title.x = element_text(hjust=0.0)) +
-  theme(legend.title = element_blank()) +
-   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
-    #xlim(-4.5,4.5)+
-  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("SC") + theme(plot.title = element_text(hjust = 0.5))  + colScale
-
-p8<-ggplot(plot_data[plot_data$State.x==st_list[8],], aes(Structures_per_hectare, County.x)) + theme_grey(base_size = 14) +  geom_vline(xintercept=0, size=1)+ 
-  geom_line(aes(group = County.x, color=cluster),size=3) +
-  geom_point(aes(color = cluster),size=7, shape=124) +
-  theme_classic() +
-  scale_color_grey() + 
-  theme(legend.position = "bottom") + theme(legend.background = element_rect(fill="white", size=0.5, linetype="solid"))  +
-  ylab("Counties (ordered by Density in Non-System area)") + 
-  theme(axis.title.x = element_text(hjust=0.0)) +
-  theme(legend.title = element_blank()) +
-   theme(legend.position = "none") +  scale_x_continuous(limit=c(-4.5,4.5),breaks=c(-4,-3,-2,-1,0,1,2,3,4),labels=c(4,3,2,1,0,1,2,3,4)) +
-    #xlim(-4.5,4.5)+
-  guides(color=guide_legend(ncol=2)) +  theme(axis.title.x=element_blank(),axis.title.y=element_blank()) + ggtitle("NC") + theme(plot.title = element_text(hjust = 0.5))  + colScale
-
-
-
-png(paste0(Fig_dir,"CountyClusterLinePlot_SU_vs_NonCoBRA_1.png"),width=15,height=22/4,res=1200,units="in")
-multiplot(p1,p2,p3,p4,cols=4)
-
-dev.off()
-
-
-png(paste0(Fig_dir,"CountyClusterLinePlot_SU_vs_NonCoBRA_2.png"),width=15,height=22/4,res=1200,units="in")
-multiplot(p5,p6,p7,p8,cols=4)
-
-dev.off()
-
-png(paste0(Fig_dir,"CountyClusterLinePlot_SU_vs_NonCoBRA_new.png"),width=15,height=22/4,res=1200,units="in")
-multiplot(p1,p2,p3,p4,p5,p6,p7,p8,cols=8)
-
-dev.off()
-
 
 plot_data$label<-NA
 plot_data$label[which(plot_data$AreaType=="NonCoBRA")]<-as.character(plot_data$County.x[which(plot_data$AreaType=="NonCoBRA")])
 
 
-
-
-
-png(paste0(Fig_dir,"CountyClusterLinePlot_SU_vs_NonCoBRA_1.png"),width=11,height=11,res=1200,units="in")
-p1 
-
-library(ggrepel)
 
 p1<-ggplot(plot_data, aes(Structures_per_hectare, County_order, label=label)) + theme_grey(base_size = 16) +
     geom_vline(xintercept=0, size=1)+ 
