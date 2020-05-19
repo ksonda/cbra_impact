@@ -172,14 +172,14 @@ grid<-spTransform(grid,crs(lc))
 
 
 #Create an Urban categorical raster and a water categorical raster and a land categorical raster
-#urb_lc <- lc1 %in% 21:24 %>% ratify #if Lc is categorical raster. 21 to 24 are categories of urban
-#if Lc is categorical raster. 11 is water
-#water_lc <- lc1 %in% 11 %>% ratify
+urb_lc <- lc1 %in% 21:24 %>% ratify #if Lc is categorical raster. 21 to 24 are categories of urban
+if Lc is categorical raster. 11 is water
+water_lc <- lc1 %in% 11 %>% ratify
 land_lc <- lc1 %in% 12:95 %>% ratify
 urb_lc<- lc1 %in% 21:24 %>% ratify
-#wetland_lc<- lc1 %in% 90:95 %>% ratify
-#ag_lc<- lc1 %in% 81:82 %>% ratify
-#dry_wilderness_lc<- lc1 %in% 31:71 %>% ratify
+wetland_lc<- lc1 %in% 90:95 %>% ratify
+ag_lc<- lc1 %in% 81:82 %>% ratify
+dry_wilderness_lc<- lc1 %in% 31:71 %>% ratify
 
 
 
@@ -187,9 +187,9 @@ grid_ex <- extract(land_lc, grid,fun = mean, na.rm = TRUE,df=TRUE) #create vars 
 colnames(grid_ex)<-c("Cell_ID","PropLand")
 
 grid<-merge(grid,grid_ex,by="Cell_ID")
-#grid<-spTransform(grid,st_crs(CBRA))
+grid<-spTransform(grid,st_crs(CBRA))
 grid_st<-st_as_sf(grid)
-#writeOGR(grid,paste0(dir,"GISData"),layer="SampleUniverse_CBRA_Land_sp",driver="ESRI Shapefile")
+writeOGR(grid,paste0(dir,"GISData"),layer="SampleUniverse_CBRA_Land_sp",driver="ESRI Shapefile")
 
 
 save.image(paste0(dir,"Analysis/CBRA_Impact_2016/data.RData"))
@@ -203,22 +203,22 @@ Now we restrcit the sample euniverse and take our sample. We sample with probabi
 
 ```{r Sample }
 sample<-st_read(paste0(dir,"GISData/SampleUniverse_CBRA_Land_sp.shp")) #read in sample universe grid
-#flkeys<-st_read(paste0(dir,"GISData/FL_Keys.shp")) #read in dissolved polygon of florida keys, because AASG does not include them
-#flkeys<-st_transform(flkeys,st_crs(sample)) 
+flkeys<-st_read(paste0(dir,"GISData/FL_Keys.shp")) #read in dissolved polygon of florida keys, because AASG does not include them
+flkeys<-st_transform(flkeys,st_crs(sample)) 
 
-#sample_keys<-sample[flkeys,]
+sample_keys<-sample[flkeys,]
 
-#sample<-sample[which(sample$PropLand>0),] #delete cells that are entirely water
-#sample<-rbind(sample,sample_keys) #add back in FL keys which are deleted by above command
-#sample<-unique(sample)
+sample<-sample[which(sample$PropLand>0),] #delete cells that are entirely water
+sample<-rbind(sample,sample_keys) #add back in FL keys which are deleted by above command
+sample<-unique(sample)
 
-#sample$PropWater<-(1-sample$PropLand)
+sample$PropWater<-(1-sample$PropLand)
 
 CBRA_dissolve<-st_union(CBRA) #dissolve polygons to one object
 
 sample$CBRA_dist<-as.numeric(st_distance(sample,CBRA_dissolve)) #calculate distance between each sample grid and the closest point on the CBRA system
 
-#st_write(sample,paste0(dir,"GISData/Sampling/Sample_1km_Ver2.2.shp"))
+st_write(sample,paste0(dir,"GISData/Sampling/Sample_1km_Ver2.2.shp"))
 
 
 
@@ -250,38 +250,38 @@ First we convert the geojson files to shapefiles
 
 ```{r geojson_to_shape}
 # 
-# setwd("D:/Dropbox/Shared CBRA/BuildingFootprints/Microsoft")
-# al<-st_read("Alabama.geojson")
-# st_write(al,"AL.shp")
-# rm(al)
+ setwd("D:/Dropbox/Shared CBRA/BuildingFootprints/Microsoft")
+ al<-st_read("Alabama.geojson")
+ st_write(al,"AL.shp")
+ rm(al)
 # 
-# fl<-st_read("Florida.geojson")
-# st_write(fl,"FL.shp")
-# rm(fl)
+ fl<-st_read("Florida.geojson")
+ st_write(fl,"FL.shp")
+ rm(fl)
 # 
-# ga<-st_read("Georgia.geojson")
-# st_write(ga,"GA.shp")
-# rm(ga)
+ ga<-st_read("Georgia.geojson")
+ st_write(ga,"GA.shp")
+ rm(ga)
 # 
-# la<-st_read("Louisiana.geojson")
-# st_write(la,"LA.shp")
-# rm(la)
+ la<-st_read("Louisiana.geojson")
+ st_write(la,"LA.shp")
+ rm(la)
 # 
-# ms<-st_read("Mississippi.geojson")
-# st_write(ms,"MS.shp")
-# rm(ms)
+ ms<-st_read("Mississippi.geojson")
+ st_write(ms,"MS.shp")
+ rm(ms)
+ 
+ nc<-st_read("NorthCarolina.geojson")
+ st_write(nc,"NC.shp")
+ rm(nc)
 # 
-# nc<-st_read("NorthCarolina.geojson")
-# st_write(nc,"NC.shp")
-# rm(nc)
+ sc<-st_read("SouthCarolina.geojson")
+ st_write(sc,"SC.shp")
+ rm(sc)
 # 
-# sc<-st_read("SouthCarolina.geojson")
-# st_write(sc,"SC.shp")
-# rm(sc)
-# 
-# tx<-st_read("Texas.geojson")
-# st_write(sc,"TX.shp")
-# rm(tx)
+ tx<-st_read("Texas.geojson")
+ st_write(sc,"TX.shp")
+ rm(tx)
 
 
 
@@ -425,27 +425,6 @@ CBRA_lc_collapse$DensityCategory[which(CBRA_lc_collapse$Structures_per_acre>=0.2
 CBRA_lc_collapse$DensityCategory[which(CBRA_lc_collapse$Structures_per_acre>0.5)]<-">0.5 Structures per Acre"
 
 st_write(CBRA_lc_collapse,paste0(GIS_dir,"CBRA_Sample_Output_v2.shp"))
-
-```
-Here we provide a validation of the counts of bldgs by Microsoft vs Hand Counts by FWS in CBRA areas
-
-```{r Validation}
-attach(CBRA_lc_collapse)
-summary(lm(CBRA_lc_collapse$bldg_counts_cbra_microsoft~CBRA_lc_collapse$bldg_counts_cbra_fws))
-
-my.formula <- bldg_counts_cbra_micrososft ~ bldg_counts_cbra_fws
-p <- ggplot(data = CBRA_lc_collapse, aes(bldg_counts_cbra_fws, bldg_counts_cbra_microsoft)) +
-  geom_smooth(method = "lm", se=FALSE, color="black", formula = my.formula,data=CBRA_lc_collapse) +
-  stat_poly_eq(formula = my.formula, 
-               aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
-               parse = TRUE) +         
-  geom_point() + geom_abline(intercept = 0.769, slope = 0.909)  + theme_bw(20) + xlab("Structure count by USFWS") + ylab("Structure count by Microsoft Bldg Footprints") + theme(aspect.ratio=1) + geom_text(x = 450, y = 2700, label = "y=0.77+0.91*x, R2=0.99")
-
-png(paste0(Fig_dir,"Bldg_validation.png"),width=6,height=6,res=1200,units="in")
-p
-dev.off()
-
-
 
 ```
 
@@ -601,27 +580,7 @@ st_write(county_lc,paste0(GIS_dir,"County_Land_Type.shp"))
 county_lc<-st_read(paste0(GIS_dir,"County_Land_Type.shp"))
 
 save.image(paste0(dir,"Analysis/CBRA_Impact_2016/PreCluster.RData"))
-# ###PLOT AND SUMMARY TABLE
-# p<-ggplot(CBRA_lc_collapse,aes(x=PropLandDeveloped*100, y=Structures_per_acre, color=Unit_Type)) + 
-#   geom_point(aes(shape=Unit_Type, color=Unit_Type), size=6) +
-#   theme_classic() + 
-#   theme(legend.position="bottom") +
-#   xlab("% Land Urbanized") +
-#   ylab("Structures/Acre") +
-#   theme(text = element_text(size=20), aspect.ratio=1) +
-#   scale_color_grey() +
-#   scale_shape_manual(values=c(19,17)) +
-#   scale_y_continuous(breaks=seq(0,1.2,0.2)) +
-#   geom_hline(yintercept=0.2) +
-#   annotate(geom="text", x=75, y=0.225, label="0.2 Structures/Acre",size=5) +
-#   theme(legend.title = element_blank())
-# 
-# p2<-ggMarginal(p,CBRA_lc_collpase,type="density",groupColour=TRUE,xparams=list(size=1.5),yparams=list(size=1.5))
-# 
-# 
-# png(paste0(dir,"Analysis/CBRA_Impact_2016/Output/Figures/CRBA_Scatter.png"),width=10,height=10,res=1200,units="in")
-# p2
-# dev.off()
+
 
 table2<-table(CBRA_lc_collapse$Unit_Type,CBRA_lc_collapse$Structures_per_acre>=0.2)
 write.csv(table2,paste0(Tab_dir,"Table2.csv"))
