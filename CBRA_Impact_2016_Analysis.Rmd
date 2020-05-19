@@ -1457,35 +1457,7 @@ b$count=1
 
 ```{r}
  load("D:/Dropbox/Shared CBRA/Analysis/CBRA_Impact_2016/RegressionPrep.RData")
-yb<-d
-yb<-yb%>%group_by(YearBuilt,cat,State)%>%summarize(Bldg_count=sum(NoOfBuildings,na.rm=TRUE),sqft=sum(sqfeet,na.rm=TRUE))
-yb.area<-d%>%group_by(cat,State)%>%summarize(Area=sum(Area_clip))
-yb<-left_join(yb,yb.area,by=c("cat","State"))
 
-yb<-yb%>%group_by(cat,State)%>%mutate(cumulative_bldgs=cumsum(Bldg_count),cumulative_sqft=cumsum(sqft))
-yb$bldg_ha<-yb$cumulative_bldgs/(yb$Area*0.404686)
-yb$FAR<-yb$cumulative_sqft/(yb$Area*43560)
-yb$Year<-yb$YearBuilt
-
-
-yb<-filter(yb,!is.na(State))
-
-pdf(file=paste0(Fig_dir,"timeseries_state_bldg_ha.pdf"),width=6.5,height=9)
-  ggplot(yb,aes(x=Year,y=bldg_ha,col=cat)) + geom_line(lwd=1) + xlim(c(1950,2016)) +     scale_y_continuous(trans='log10',labels=comma) + facet_wrap(~ State, ncol=2) + theme_bw() + theme(legend.position="top") + ylab("log10 Buildings per Hectare")
-dev.off()
-
-
-pdf(file=paste0(Fig_dir,"timeseries_state_bldg_count.pdf"),width=6.5,height=9)
-  ggplot(yb,aes(x=Year,y=cumulative_bldgs,col=cat)) + geom_line(lwd=1) + xlim(c(1950,2016)) +     scale_y_continuous(trans='log10',labels=comma) + facet_wrap(~ State, ncol=2) + theme_bw() + theme(legend.position="top") + ylab("log10 Building Count")
-dev.off()
-
-pdf(file=paste0(Fig_dir,"timeseries_state_FAR.pdf"),width=6.5,height=9)
-  ggplot(yb,aes(x=Year,y=FAR,col=cat)) + geom_line(lwd=1) + xlim(c(1950,2016)) +     scale_y_continuous(trans='log10',labels=comma) + facet_wrap(~ State, ncol=2) + theme_bw() + theme(legend.position="top") + ylab("log10 FAR")
-dev.off()
-
-pdf(file=paste0(Fig_dir,"timeseries_state_sqft.pdf"),width=6.5,height=9)
-  ggplot(yb,aes(x=Year,y=cumulative_sqft,col=cat)) + geom_line(lwd=1) + xlim(c(1950,2016)) +     scale_y_continuous(trans='log10',labels=comma) + facet_wrap(~ State, ncol=2) + theme_bw() + theme(legend.position="top") + ylab("log10 Total Sq ft")
-dev.off()
 ```
 
 
