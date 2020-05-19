@@ -1409,32 +1409,6 @@ BuildingParcelCheck$cat[which(BuildingParcelCheck$Prop.OPA>0.9)]<-"OPA"
 
 #BuildingParcelCheck$YearBuilt[which(is.nan(BuildingParcelCheck$YearBuilt))]
 
-#Table of buildings and whetehr missing year built by category.
-library(lfe)
-summary(felm(is.nan(YearBuilt)~cat |FIPS| 0| FIPS,data=BuildingParcelCheck[which(BuildingParcelCheck$BldgPresent>0),]))
-model<-felm(is.na(YearBuilt)~cat |0| 0| FIPS,data=BuildingParcelCheck[which(BuildingParcelCheck$BldgPresent>0),])
-model1.fe<-felm(is.na(YearBuilt)~cat |FIPS| 0| FIPS,data=BuildingParcelCheck[which(BuildingParcelCheck$BldgPresent>0),])
-
-
-data2<-BuildingParcelCheck[which(is.na(BuildingParcelCheck$YearBuilt)),]
-model2<-felm(as.numeric(BldgPresent)~cat|0|0|FIPS ,data=data2, weights=data2$Area)
-model2.noweight<-felm(as.numeric(BldgPresent)~cat|0|0|FIPS ,data=data2)
-model2.fe<-felm(as.numeric(BldgPresent)~cat|FIPS|0|FIPS ,data=data2, weights=data2$Area)
-model2.fe.noweight<-felm(as.numeric(BldgPresent)~cat|FIPS|0|FIPS ,data=data2)
-
-
-data3<-BuildingParcelCheck[which(BuildingParcelCheck$BldgPresent==0),]
-model3<-felm(!is.na(YearBuilt)~cat|0|0|FIPS ,data=data3, weights=data3$Area)
-model3.fe<-felm(!is.na(YearBuilt)~cat|FIPS|0|FIPS ,data=data3, weights=data3$Area)
-    
-
-stargazer(model,model1.fe,model2,model2.fe,model3,model3.fe,type="html",out=paste0(Zdir,"MissingYearBuilt.html"))
-
-#Table of land with built year that does not have a building
-
-summary(lm(is.na(YearBuilt)~cat + factor(FIPS),data=BuildingParcelCheck[which(BuildingParcelCheck$BldgPresent>0),]))
-
-prop.table(table(BuildingParcelCheck$MissingCategory,BuildingParcelCheck$LU_SubClass),2)
 
 d$Area<-d$Area_cat
 
@@ -1552,8 +1526,6 @@ p3$LU<-factor(p3$LU,levels(factor(p3$LU))[c(4,6,7,8,1,3,5,2)])
 
 
 LU<-p3
-
-#LU<-LU[which(!is.na(LU$LU)),]
 LU.s<-LU%>%group_by(LU,cat)%>%summarise(LUArea=sum(Area_cat))
 areas<-LU%>%group_by(cat)%>%summarise(Area=sum(Area_cat))
 
@@ -1585,15 +1557,6 @@ Bldg_Area_Cat_LU<-ggplot(LU,aes(y=perc, x=LU, fill=LU)) +
   theme(legend.position="none") +
   facet_grid(rows=vars(Devcat),cols=vars(cat),labeller = labeller(cat = label_wrap_gen(16)),scales="free_y",space="free_y",switch="y")
 
-dat_text1 <- data.frame(
-   txt = c("a","b","c","d","e",
-     "Subtotal: 11.4%", "Subtotal: 0.7%", "Subtotal: 15.4%","Subtotal: 6.3%","Subtotal: 0.4%",
-          "Subtotal: 11.4%", "Subtotal: 0.7%", "Subtotal: 15.4%","Subtotal: 6.3%","Subtotal: 0.4%"
-             ),
-
-   perc = 50,
-   y=1
- )
 
 LU_tab<-LU%>%group_by(cat,Devcat)%>%summarise(perc=sum(perc))
 LU_tab$perc<-round(LU_tab$perc,1)
@@ -1603,7 +1566,6 @@ LU_tab$label<-paste0("Subtotal: ", LU_tab$perc,"%")
 
 Bldg_Area_Cat_LU2<-Bldg_Area_Cat_LU +  geom_text(data=LU_tab,aes(y=40,x=1,label = label),inherit.aes=FALSE, size=6)
  # geom_vline(xintercept = 3.5, col='black', lwd=2)
-Bldg_Area_Cat_LU2
 
 tiff(paste0(Fig_dir,"Land_Use_Pecent_overall2.tiff"),width=16,height=9,res=1200,units='in')
 Bldg_Area_Cat_LU2
@@ -1620,20 +1582,6 @@ LU<-merge(LU.s,areas,by=c("cat","State"))
 
 LU$perc<-100*LU$LUArea/LU$Area
 
-Bldg_Area_Cat_LU_ST3<-ggplot(LU,aes(y=perc, x=LU, fill=LU)) + 
-  geom_bar(stat="identity",position="dodge") + 
-  coord_flip()  + 
-  theme_bw(base_size = 20) + 
-  scale_fill_viridis_d() +
-  ggtitle("(%) Area Land Use Categories (Zillow) by CoBRA Category")+
-  xlab("CoBRA Category") + ylab("(%) Area") +
-  theme(legend.position="none") +
-  facet_grid(cols=vars(cat),rows=vars(State),labeller = labeller(cat = label_wrap_gen(16))) + 
-  geom_vline(xintercept = 4.5, col='black', lwd=2)
-
-png(paste0(Fig_dir,"Land_Use_Pecent_overall_st.png"),width=16,height=9,res=1200,units='in')
-Bldg_Area_Cat_LU_ST
-dev.off()
 
 
 LU<-p3%>%group_by(LU,StructureDensity,cat)%>%summarise(LUArea=sum(Area_cat))
@@ -1757,12 +1705,7 @@ b$count=1
 #Area
 
 ####Land Value
-# 
-# b$LandMarketValue_Acre<-b$LandMarketValue/(b$Area_Parcel*1000)
-# #b$LandMarketValue_Acre[which(b$LandMarketValue_Acre>5000)]<-5000
-# 
-# #Land Market Value/Acre
-# 
+
 
 #bldg footprintel
 
@@ -1983,17 +1926,6 @@ m5$model="No Fixed Effects"
 m5$DV="log(Sales Price (2016 USD/m^2))"
 m5.f$model="County Fixed Effects"
 m5.f$DV="log(Sales Price (2016 USD/m^2))"
-
-
-
-
-# 
-# m5.trim$model="No Fixed Effects"
-# m5.f.trim$model="County Fixed Effects"
-# 
-# m5.f.y$model="Regular with years"
-# m5.f.y.trim$model="County Fixed Effects with Years"
-
 
 
 p1<-dwplot(rbind(m1,m1.f))+ # plot line at zero _behind_ coefs
